@@ -1,0 +1,83 @@
+version: 2.1
+
+orbs:
+  aws-cli: circleci/aws-cli@2.0.3
+  ghpr: narrativescience/ghpr@1.1.2
+
+jobs:
+  test:
+    docker:
+      - image: cimg/python:3.6
+    steps:
+      - aws-cli/install
+      - ghpr/build-prospective-branch
+      - run:
+          name: Install dependencies
+          command: |
+            pip install -U pip setuptools
+            pip install poetry
+            export CODEARTIFACT_AUTH_TOKEN="$(
+              aws codeartifact get-authorization-token \
+                --domain lexio \
+                --domain-owner "$AWS_ACCOUNT_ID" \
+                --query authorizationToken \
+                --output text)"
+            poetry config repositories.codeartifact "$CODEARTIFACT_URL"
+            poetry config http-basic.codeartifact aws "$CODEARTIFACT_AUTH_TOKEN"
+
+            poetry install
+      - run:
+          name: Run commit hooks
+          command: |
+            poetry run pre-commit install
+            poetry run pre-commit run \
+              --source "origin/${GITHUB_PR_BASE_BRANCH}" \
+              --origin "origin/${CIRCLE_BRANCH}" \
+              --show-diff-on-failure
+      - run: poetry build
+      - run: poetry run pytest --junit-xml .junit/unit/results.xml
+      - store_test_results:
+          path: .junit
+      - ghpr/post-pr-comment:
+          comment: Tests failed!
+          when: on_fail
+  publish:
+    docker:
+      - image: cimg/python:3.6
+    steps:
+      - aws-cli/install
+      - checkout
+      - run: pip install poetry
+      - run: poetry install
+      - run: poetry build
+      - run:
+          name: Configure private package repository
+          command: |
+            export CODEARTIFACT_AUTH_TOKEN="$(
+              aws codeartifact get-authorization-token \
+                --domain lexio \
+                --domain-owner "$AWS_ACCOUNT_ID" \
+                --query authorizationToken \
+                --output text)"
+            poetry config repositories.codeartifact "$CODEARTIFACT_URL"
+            poetry config http-basic.codeartifact aws "$CODEARTIFACT_AUTH_TOKEN"
+      - run: poetry publish -r codeartifact
+
+workflows:
+  pull_request:
+    jobs:
+      - test:
+          context: lexio-package
+          filters:
+            branches:
+              ignore:
+                - main
+  publish:
+    jobs:
+      - publish:
+          context: lexio-package
+          filters:
+            tags:
+              only: /v[0-9]+(\.[0-9]+)*/
+            branches:
+              ignore: /.*/

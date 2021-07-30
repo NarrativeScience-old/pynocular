@@ -1,0 +1,66 @@
+---
+default_stages: [commit]
+
+default_language_version:
+  python: python3
+
+exclude: "examples/.*$"
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v2.4.0
+    hooks:
+      - id: check-ast
+      - id: check-builtin-literals
+      - id: check-byte-order-marker
+      - id: check-executables-have-shebangs
+        # Need to define stages explicitly since `default_stages` was not being respected
+        stages: [commit]
+      - id: check-merge-conflict
+      - id: debug-statements
+      - id: forbid-new-submodules
+      - id: no-commit-to-branch
+      - id: trailing-whitespace
+        args: [--markdown-linebreak-ext=md]
+        # Need to define stages explicitly since `default_stages` was not being respected
+        stages: [commit]
+
+  - repo: local
+    hooks:
+      - id: codespell
+        name: Spell-check Python files (codespell)
+        entry: codespell
+        language: python
+        types: [file, python]
+        additional_dependencies: [codespell==2.0.0]
+
+      - id: isort
+        name: Sort Python imports (isort)
+        entry: isort
+        language: python
+        types: [file, python]
+        additional_dependencies: [isort==4.3.16]
+
+      - id: black
+        name: Format Python (black)
+        entry: black
+        language: python
+        types: [file, python]
+        additional_dependencies: [black==19.3b0]
+
+      - id: pydocstyle
+        name: Lint Python docstrings (pydocstyle)
+        entry: pydocstyle
+        language: python
+        types: [file, python]
+        additional_dependencies: [pydocstyle==5.0.2]
+
+      - id: flake8
+        name: Lint Python (flake8)
+        entry: flake8 --config .flake8
+        language: python
+        types: [file, python]
+        additional_dependencies:
+          - flake8==3.7.9
+          - "flake8-import-order<0.19,>=0.18"
+          - flake8-print>=3.1.4,<4

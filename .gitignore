@@ -1,0 +1,10 @@
+.DS_Store
+.venv*
+.vscode
+**/__pycache__/
+**/.cache/
+**/.tox
+**/*.coverage
+**/*.egg-info
+**/*.pyc
+**/dist

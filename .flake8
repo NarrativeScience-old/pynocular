@@ -1,0 +1,20 @@
+[flake8]
+# E203: Conflicts with black's formatting
+# E501: Conflicts with black's formatting, which defaults to a max
+#       line length of 88 but will go over if necessary.
+#       See https://github.com/ambv/black#line-length for more info
+# W605: Conflicts with regular expression formatting
+ignore = E203,E501,E731,W503,W605
+import-order-style = google
+# Packages added in this list should be added to the setup.cfg file as well
+application-import-names =
+    ns_sql_utils
+exclude =
+    *vendor*
+    .venv
+    .env
+    .pants.d
+    .pantscache
+    .git
+    __init__.py
+    setup.py
