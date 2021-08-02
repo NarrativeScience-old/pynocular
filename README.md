@@ -1,6 +1,6 @@
 # ns_sql_utils
 
-Utilities for interacting with sql databases
+Utilities for interacting with SQL databases
 
 Features:
 

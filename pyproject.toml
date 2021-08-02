@@ -1,9 +1,9 @@
 [tool.poetry]
 name = "ns_sql_utils"
 version = "0.1.0"
-description = "Utilities for interacting with sql databases"
+description = "Utilities for interacting with SQL databases"
 authors = ["Gregory Berns-Leone <gbernsleone@narrativescience.com>"]
-license = "BSD-3-Clause"
+license = "Proprietary"
 readme = "README.md"
 homepage = "https://github.com/NarrativeScience/ns_sql_utils"
 repository = "https://github.com/NarrativeScience/ns_sql_utils"
@@ -14,7 +14,7 @@ python = "^3.6.5"
 [tool.poetry.dev-dependencies]
 pre-commit = "^2.10.1"
 pytest = "^6.2.2"
-
+black = {version = "^21.7b0", allow-prereleases = true}
 
 [[tool.poetry.source]]
 name = "codeartifact"
