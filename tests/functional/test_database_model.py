@@ -18,7 +18,7 @@ from ns_sql_utils.exceptions import DatabaseModelMissingField, DatabaseRecordNot
 test_db_name = EnvConfig.string("TEST_DB_NAME", "test_db")
 test_connection_string = EnvConfig.string(
     "TEST_DB_CONNECTION_STRING",
-    f"postgresql://nssvc@localhost:5432/{test_db_name}?sslmode=disable",
+    f"postgresql://postgres@localhost:5432/{test_db_name}?sslmode=disable",
 )
 testdb = DBInfo(DatabaseType.aiopg_engine, test_connection_string)
 
