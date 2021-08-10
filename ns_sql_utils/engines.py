@@ -1,5 +1,6 @@
 """Functions for getting database engines and connections"""
 import asyncio
+from functools import wraps
 import logging
 import ssl
 from typing import Any, Callable, Dict, NamedTuple, Optional, Tuple, Union
@@ -20,11 +21,7 @@ from ns_sql_utils.aiopg_transaction import (
     ConditionalTransaction,
     transaction as Transaction,
 )
-from ns_sql_utils.config import (
-    pool_recycle,
-    db_pool_min_size,
-    db_pool_max_size,
-)
+from ns_sql_utils.config import db_pool_max_size, db_pool_min_size, pool_recycle
 
 logger = logging.getLogger(__name__)
 

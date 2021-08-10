@@ -28,11 +28,11 @@ from sqlalchemy.sql.elements import BinaryExpression, UnaryExpression
 from ns_sql_utils.engines import DBEngine, DBInfo
 from ns_sql_utils.exceptions import (
     DatabaseModelMisconfigured,
+    DatabaseModelMissingField,
+    DatabaseRecordNotFound,
+    InvalidFieldValue,
     InvalidMethodParameterization,
     InvalidTextRepresentation,
-    InvalidFieldValue,
-    DatabaseRecordNotFound,
-    DatabaseModelMissingField,
 )
 
 

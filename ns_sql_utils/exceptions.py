@@ -3,8 +3,7 @@ import traceback
 from typing import Any, Dict, Iterable, Optional
 
 # Reexport
-from psycopg2.errors import InvalidTextRepresentation
-
+from psycopg2.errors import InvalidTextRepresentation  # noqa: F401
 
 # This is copied from ns_python_core for convenience but definitely belongs
 # somewhere else.

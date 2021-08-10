@@ -2,19 +2,18 @@
 import asyncio
 from asyncio import gather, sleep
 from datetime import datetime
-import pytest
 from typing import Optional
 from uuid import uuid4
 
+from ns_env_config import EnvConfig
 from pydantic import BaseModel, Field
 from pydantic.error_wrappers import ValidationError
+import pytest
 
-from ns_env_config import EnvConfig
-from ns_sql_utils.engines import DBInfo, DBEngine, DatabaseType
 from ns_sql_utils.database_model import database_model, UUID_STR
 from ns_sql_utils.db_util import add_trigger, create_new_database, create_table
+from ns_sql_utils.engines import DatabaseType, DBEngine, DBInfo
 from ns_sql_utils.exceptions import DatabaseModelMissingField, DatabaseRecordNotFound
-
 
 test_db_name = EnvConfig.string("TEST_DB_NAME", "test_db")
 test_connection_string = EnvConfig.string(
@@ -49,6 +48,7 @@ class Topic(BaseModel):
 
 
 async def setup_db_and_tables():
+    """Create the database and tables"""
     begin_connection_string = EnvConfig.string(
         "BEGIN_CONNECTION_STRING",
         "postgresql://postgres@localhost:5432/postgres?sslmode=disable",

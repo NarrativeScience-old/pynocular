@@ -7,14 +7,20 @@ from aiopg.sa.connection import SAConnection
 import sqlalchemy as sa
 from sqlalchemy.sql.ddl import CreateTable
 
-from ns_sql_utils.engines import DBInfo, DBEngine, DatabaseType
+from ns_sql_utils.engines import DatabaseType, DBEngine, DBInfo
 from ns_sql_utils.exceptions import InvalidSqlIdentifierErr
 
 logger = logging.getLogger()
 
 
 async def create_new_database(connection_string: str, db_name: str):
-    """Create a new database database for testing"""
+    """Create a new database database for testing
+
+    Args:
+        connection_string: A connection string for the database
+        db_name: the name of the database to create
+
+    """
     begindb = DBInfo(DatabaseType.aiopg_engine, connection_string)
     begin_conn = await (await DBEngine.get_engine(begindb)).acquire()
     # End existing commit
@@ -26,14 +32,25 @@ async def create_new_database(connection_string: str, db_name: str):
 
 
 async def create_table(db_info: DBInfo, table: sa.Table):
-    """Create table in database"""
+    """Create table in database
+
+    Args:
+        db_info: Information for the database to connect to
+        table: The table to create
+
+    """
     engine = await DBEngine.get_engine(db_info)
     conn = await engine.acquire()
     await conn.execute(CreateTable(table))
 
 
 async def setup_trigger(conn: SAConnection):
-    """Set up created/updated trigger"""
+    """Set up created/updated trigger
+
+    Args:
+        conn: an async sqlalchemy connection
+
+    """
     await conn.execute('CREATE EXTENSION IF NOT EXISTS "uuid-ossp";')
     await conn.execute('CREATE EXTENSION IF NOT EXISTS "plpgsql";')
     await conn.execute(
@@ -57,6 +74,7 @@ async def add_trigger(conn: SAConnection, table: str) -> None:
     """Helper method for adding datetime triggers on a table
 
     Args:
+        conn: an async sqlalchemy connection
         table: The name of the table to add an edit trigger for
 
     """
@@ -76,6 +94,7 @@ async def remove_trigger(conn: SAConnection, table: str) -> None:
     """Helper method for removing datetime triggers on a table
 
     Args:
+        conn: an async sqlalchemy connection
         table: The name of the table to remove a trigger for
 
     """
