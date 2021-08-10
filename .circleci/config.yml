@@ -35,6 +35,15 @@ jobs:
               --origin "origin/${CIRCLE_BRANCH}" \
               --show-diff-on-failure
       - run: poetry build
+      - run:
+          name: Set up local postgres
+          command: |
+            sudo apt update
+            sudo apt install postgresql
+            sudo sed -i -e \
+              $'s,127.0.0.1/32            md5,127.0.0.1/32            peer,' \
+              /etc/postgresql/12/main/pg_hba.conf
+            sudo pg_ctlcluster 12 main start
       - run: poetry run pytest --junit-xml .junit/unit/results.xml
       - store_test_results:
           path: .junit
