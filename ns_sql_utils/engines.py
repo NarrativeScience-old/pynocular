@@ -1,12 +1,12 @@
 """Functions for getting database engines and connections"""
 import asyncio
+from enum import Enum
 from functools import wraps
 import logging
 import ssl
 from typing import Any, Callable, Dict, NamedTuple, Optional, Tuple, Union
 from urllib.parse import parse_qs
 
-from aenum import UniqueEnum
 from aiopg import Connection as AIOPGConnection
 from aiopg.sa import create_engine, Engine
 from asyncpg.connection import Connection as AsyncPGConnection
@@ -21,7 +21,7 @@ from ns_sql_utils.aiopg_transaction import (
     ConditionalTransaction,
     transaction as Transaction,
 )
-from ns_sql_utils.config import db_pool_max_size, db_pool_min_size, pool_recycle
+from ns_sql_utils.config import DB_POOL_MAX_SIZE, DB_POOL_MIN_SIZE, POOL_RECYCLE
 
 logger = logging.getLogger(__name__)
 
@@ -76,7 +76,7 @@ async def get_aiopg_engine(
             conn_str,
             enable_hstore=enable_hstore,
             application_name=application_name,
-            pool_recycle=pool_recycle,
+            pool_recycle=POOL_RECYCLE,
         )
         _engines[cache_key] = engine
         logger.debug(f"DB engine created successfully: {engine}")
@@ -111,7 +111,7 @@ def get_psycopg_engine(
         return None
 
     if engine is None or force:
-        engine = create_engine_sync(conn_str, pool_recycle=pool_recycle)
+        engine = create_engine_sync(conn_str, pool_recycle=POOL_RECYCLE)
         _engines[cache_key] = engine
         logger.debug(f"Sync DB engine created successfully: {engine}")
 
@@ -181,9 +181,9 @@ async def get_asyncpgsa_pool(
         try:
             pool = await create_pool(
                 conn_str,
-                min_size=db_pool_min_size,
-                max_size=db_pool_max_size,
-                max_inactive_connection_lifetime=pool_recycle,
+                min_size=DB_POOL_MIN_SIZE,
+                max_size=DB_POOL_MAX_SIZE,
+                max_inactive_connection_lifetime=POOL_RECYCLE,
                 **options,
             )
         except Exception as e:
@@ -191,8 +191,8 @@ async def get_asyncpgsa_pool(
                 {
                     "description": "Failed to create asyncpg connection pool",
                     "application_name": application_name,
-                    "min_size": db_pool_min_size,
-                    "max_size": db_pool_max_size,
+                    "min_size": DB_POOL_MIN_SIZE,
+                    "max_size": DB_POOL_MAX_SIZE,
                     "force": force,
                     "if_exists": if_exists,
                     "error_msg": repr(e),
@@ -207,7 +207,7 @@ async def get_asyncpgsa_pool(
     return pool
 
 
-class DatabaseType(UniqueEnum):
+class DatabaseType(Enum):
     """Database type to differentiate engines and pools"""
 
     aiopg_engine = "aiopg_engine"

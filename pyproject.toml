@@ -10,8 +10,6 @@ repository = "https://github.com/NarrativeScience/ns_sql_utils"
 
 [tool.poetry.dependencies]
 python = "^3.6.5"
-# Up to "^3.1"?
-aenum = "^2.1"
 aiocontextvars = "=0.2.2"
 # Can we unpin this?
 # aiopg = ">=1.2"

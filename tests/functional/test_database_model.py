@@ -15,10 +15,17 @@ from ns_sql_utils.db_util import add_trigger, create_new_database, create_table
 from ns_sql_utils.engines import DatabaseType, DBEngine, DBInfo
 from ns_sql_utils.exceptions import DatabaseModelMissingField, DatabaseRecordNotFound
 
+db_user_password = EnvConfig.string("DB_USER_PASSWORD")
+# DB to initially connect to so we can create a new db
+existing_connection_string = EnvConfig.string(
+    "EXISTING_DB_CONNECTION_STRING",
+    f"postgresql://postgres:{db_user_password}@localhost:5432/postgres?sslmode=disable",
+)
+
 test_db_name = EnvConfig.string("TEST_DB_NAME", "test_db")
 test_connection_string = EnvConfig.string(
     "TEST_DB_CONNECTION_STRING",
-    f"postgresql://postgres@localhost:5432/{test_db_name}?sslmode=disable",
+    f"postgresql://postgres:{db_user_password}@localhost:5432/{test_db_name}?sslmode=disable",
 )
 testdb = DBInfo(DatabaseType.aiopg_engine, test_connection_string)
 
@@ -49,11 +56,7 @@ class Topic(BaseModel):
 
 async def setup_db_and_tables():
     """Create the database and tables"""
-    begin_connection_string = EnvConfig.string(
-        "BEGIN_CONNECTION_STRING",
-        "postgresql://postgres@localhost:5432/postgres?sslmode=disable",
-    )
-    await create_new_database(begin_connection_string, test_db_name)
+    await create_new_database(existing_connection_string, test_db_name)
 
     await create_table(testdb, Org._table)
     await create_table(testdb, Topic._table)

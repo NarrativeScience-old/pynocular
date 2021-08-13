@@ -21,14 +21,14 @@ async def create_new_database(connection_string: str, db_name: str):
         db_name: the name of the database to create
 
     """
-    begindb = DBInfo(DatabaseType.aiopg_engine, connection_string)
-    begin_conn = await (await DBEngine.get_engine(begindb)).acquire()
+    existing_db = DBInfo(DatabaseType.aiopg_engine, connection_string)
+    conn = await (await DBEngine.get_engine(existing_db)).acquire()
     # End existing commit
-    await begin_conn.execute("commit")
+    await conn.execute("commit")
     # Create db
-    await begin_conn.execute(f"drop database if exists {db_name}")
-    await begin_conn.execute(f"create database {db_name}")
-    await begin_conn.close()
+    await conn.execute(f"drop database if exists {db_name}")
+    await conn.execute(f"create database {db_name}")
+    await conn.close()
 
 
 async def create_table(db_info: DBInfo, table: sa.Table):
@@ -42,6 +42,7 @@ async def create_table(db_info: DBInfo, table: sa.Table):
     engine = await DBEngine.get_engine(db_info)
     conn = await engine.acquire()
     await conn.execute(CreateTable(table))
+    await conn.close()
 
 
 async def setup_trigger(conn: SAConnection):
