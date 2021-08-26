@@ -36,6 +36,15 @@ jobs:
   test:
     docker:
       - image: cimg/python:3.6
+        environment:
+          EXISTING_DB_NAME: circle_test
+          TEST_DB_NAME: test_db
+          DB_USER_NAME: postgres
+          DB_USER_PASSWORD: $CIRCLE_SHA1
+      - image: circleci/postgres:11-alpine-ram
+        environment:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: $CIRCLE_SHA1
     steps:
       - add_ssh_keys:
           fingerprints:
@@ -56,7 +65,7 @@ jobs:
               --origin "origin/${CIRCLE_BRANCH}" \
               --show-diff-on-failure
       - run: poetry build
-      - run: poetry run pytest --junit-xml .junit/unit/results.xml
+      - run: poetry run pytest tests/functional --junit-xml .junit/functional/results.xml
       - store_test_results:
           path: .junit
       - ghpr/post-pr-comment:
