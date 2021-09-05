@@ -25,8 +25,8 @@ from sqlalchemy.schema import FetchedValue
 from sqlalchemy.sql.base import ImmutableColumnCollection
 from sqlalchemy.sql.elements import BinaryExpression, UnaryExpression
 
-from ns_sql_utils.engines import DBEngine, DBInfo
-from ns_sql_utils.exceptions import (
+from pynocular.engines import DBEngine, DBInfo
+from pynocular.exceptions import (
     DatabaseModelMisconfigured,
     DatabaseModelMissingField,
     DatabaseRecordNotFound,
@@ -53,8 +53,6 @@ def is_valid_uuid(string: str) -> bool:
         return False
 
 
-# To be swapped once ns_data_structures exists
-# from ns_data_structures.pydantic_types import UUID_STR
 class UUID_STR(str):
     """A string that represents a UUID4 value"""
 
