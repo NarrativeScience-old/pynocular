@@ -148,12 +148,29 @@ async def change_org_tag(org_id: UUID_STR, tag: str):
 ```
 
 #### Complex queries
-Sometimes your application will require joining several tables together and returning that information in some format. Because Pynoocular is backed
-by SQLAlchemy we can access those properties to write pure SQLAlchemy queries as well!
+Sometimes your application will require performing complex queries, such as getting the count of each tag type for all orgs in the database.
+Because Pynoocular is backed by SQLAlchemy we can access those properties to write pure SQLAlchemy queries as well!
 
 ```
-CommentThread
+from sqlalchemy import func, select
+from pynocular.engines import DBEngine
+async def generate_org_stats():
+    query = (
+        select([func.count(Org.column.id), Org.column.tag])
+        .group_by(Org.column.tag)
+        .order_by(func.count().desc())
+    )
+    async with await DBEngine.transaction(Org._database_info, is_conditional=False) as conn:
+        result = await conn.execute(query)
+        return [dict(row) async for row in result]
 ``` 
+NOTE: `DBengine.transaction` is used to create a connection to the database using the credentials passed in.
+If `is_conditional` is False then it will add the query to any transaction that is opened in the call chain. This allows us to make database calls
+in different functions but still have them all be under the same database transaction. If there is no transaction opened in the call chain it will open
+a new one and any subsequent calls underneath that context manager will be added to the new transaction.
+
+If `is_conditional` is True then the connection will not create a new transaction if there are no open ones above it and instead will make the database call
+without using a transaction.
 
 
 ### Creating database tables
@@ -164,10 +181,10 @@ in your database based off of Pydantic models!
 ```
 from pynocular.db_utils import create_tracked_table
 
-from my_package import Org, db_info
+from my_package import Org
 
 # Creates the table "organizations" in the database defined by db_info
-await create_tracked_table(db_info, Org._table)
+await create_tracked_table(Org._database_info, Org._table)
 
 ```
 
