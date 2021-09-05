@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "pynocular"
-version = "0.2.0"
+version = "0.3.0"
 description = "Utilities for interacting with SQL databases"
 authors = ["Gregory Berns-Leone <gbernsleone@narrativescience.com>"]
 license = "Proprietary"
