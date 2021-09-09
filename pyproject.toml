@@ -2,7 +2,11 @@
 name = "pynocular"
 version = "0.3.0"
 description = "Aysnchronous ORM framework for Pydantic Models"
-authors = ["Gregory Berns-Leone <gbernsleone@narrativescience.com>"]
+authors = [
+  "RJ Santana <ssantana@narrativescience.com>",
+  "Patrick Hennessy <phennessy@narrativescience.com>",
+  "Gregory Berns-Leone <gbernsleone@narrativescience.com>"
+]
 license = "BSD-3-Clause"
 readme = "README.md"
 homepage = "https://github.com/NarrativeScience/pynocular"
