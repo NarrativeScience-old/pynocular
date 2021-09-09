@@ -4,7 +4,6 @@
 
 Pynocular is a lightweight ORM that lets you query your database using Pydantic models and asyncio.
 
-
 With Pynocular you can decorate your existing Pydantic models to sync them with the corresponding table in your
 database, allowing you to persist changes without ever having to think about the database. Transaction management is
 automatically handled for you so you can focus on the important parts of your code. This integrates seamlessly with frameworks that use Pydantic models such as FastAPI.
