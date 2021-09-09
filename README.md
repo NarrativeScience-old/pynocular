@@ -163,7 +163,7 @@ async def generate_org_stats():
         return [dict(row) async for row in result]
 ``` 
 NOTE: `DBengine.transaction` is used to create a connection to the database using the credentials passed in.
-If `is_conditional` is False then it will add the query to any transaction that is opened in the call chain. This allows us to make database calls
+If `is_conditional` is `False`, then it will add the query to any transaction that is opened in the call chain. This allows us to make database calls
 in different functions but still have them all be under the same database transaction. If there is no transaction opened in the call chain it will open
 a new one and any subsequent calls underneath that context manager will be added to the new transaction.
 
