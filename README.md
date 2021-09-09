@@ -52,7 +52,7 @@ db_info = DBInfo(DatabaseType.aiopg_engine, connection_string)
 Pynocular supports connecting to your database through two different asyncio engines; aiopg and asyncpgsa.
 You can pick which one you want to use by passing the correct `DatabaseType` enum value into `DBInfo`.
 
-Once You have created your db_info object you are ready to decorate your Pydantic models and interact with your database!
+Once you define a `db_info` object, you are ready to decorate your Pydantic models and interact with your database!
 
 ```
 from pydantic import BaseModel, Field
