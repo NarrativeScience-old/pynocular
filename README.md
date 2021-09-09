@@ -172,7 +172,7 @@ If `is_conditional` is `True` and there is no transaction in the call chain, the
 
 ### Creating database tables
 When you decorate a Pydantic model with Pynocular, it creates a SQLAlchemy table as a private variable. This can be accessed via the `_table` property
-(although accessing private variables is not recommended). Using this, along with the `create_tracked_table` function that Pynocular has allows you to create tables
+(although accessing private variables is not recommended). Using this, along with Pynocular's `create_tracked_table` function, allows you to create tables
 in your database based off of Pydantic models!
 
 ```
