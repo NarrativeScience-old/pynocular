@@ -147,7 +147,7 @@ async def change_org_tag(org_id: UUID_STR, tag: str):
 
 #### Complex queries
 Sometimes your application will require performing complex queries, such as getting the count of each unique field value for all records in the table.
-Because Pynoocular is backed by SQLAlchemy we can access those properties to write pure SQLAlchemy queries as well!
+Because Pynocular is backed by SQLAlchemy, we can access table columns directly to write pure SQLAlchemy queries as well!
 
 ```
 from sqlalchemy import func, select
