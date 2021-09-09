@@ -134,7 +134,7 @@ If you have a use case that requires deleting a bunch of records based on some f
 # Delete all records with the tag "green"
 await Org.delete_records(tag="green")
 
-# Delete all records with if their tag has any of the following; "green", "blue", "red"
+# Delete all records with if their tag has any of the following: "green", "blue", "red"
 await Org.delete_records(tag=["green", "blue", "red"])
 ```
 
