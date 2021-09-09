@@ -35,7 +35,7 @@ poetry add pynocular
 
 ### Basic Usage
 Pynocular works by decorating your base Pydantic model with the function `database_model`. Once decorated
-with the proper information you can proceed to use that model to interface with your specified database table
+with the proper information, you can proceed to use that model to interface with your specified database table.
 
 The first step is to define your DBInfo object in your codebase. This will contain the connection information to your
 database
