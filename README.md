@@ -139,7 +139,7 @@ await Org.delete_records(tag=["green", "blue", "red"])
 ```
 
 Sometimes you may want to update the value of a record in a database without having to fetch it first. This can be accomplished by using
-the `update_record` function
+the `update_record` function:
 ```
 async def change_org_tag(org_id: UUID_STR, tag: str):
     await Org.update_record(id=org_id, tag=tag)
