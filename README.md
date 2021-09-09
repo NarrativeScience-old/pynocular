@@ -126,7 +126,7 @@ async def create_orgs(org_list: List[Org]):
     await Org.create_list(org_list)
 
 ```
-This function will batch insert all of those records into your database table
+This function will insert all records into your database table in one batch.
 
 
 If you have a use case that requires deleting a bunch of records based on some field value, you can use `delete_records` to accomplish
