@@ -1,10 +1,12 @@
 # pynocular
 
+[![](https://img.shields.io/pypi/v/pynocular.svg)](https://pypi.org/pypi/pynocular/) [![License](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](https://opensource.org/licenses/BSD-3-Clause)
+
 Pynocular is a lightweight ORM that lets you query your database using Pydantic models and asyncio.
 
 With Pynocular you can decorate your existing Pydantic models to sync them with the corresponding table in your
 database, allowing you to persist changes without ever having to think about the database. Transaction management is 
-automatically handled for you so you can focus on the important parts of your code.
+automatically handled for you so you can focus on the important parts of your code. This integrates seamlessly with frameworks that use Pydantic models such as FastAPI.
 
 
 Features:
@@ -39,7 +41,7 @@ with the proper information, you can proceed to use that model to interface with
 
 The first step is to define a `DBInfo` object. This will contain the connection information to your database.
 
-```
+```python
 from pynocular.engines import DatabaseType, DBInfo
 
 
@@ -54,7 +56,7 @@ You can pick which one you want to use by passing the correct `DatabaseType` enu
 
 Once you define a `db_info` object, you are ready to decorate your Pydantic models and interact with your database!
 
-```
+```python
 from pydantic import BaseModel, Field
 from pynocular.database_model import database_model, UUID_STR
 
@@ -120,17 +122,20 @@ be addressed using Pynocular.
 Sometimes you want to insert a bunch of records into a database and you don't want to do an insert for each one.
 This can be handled by the `create_list` function.
 
-```
-# Retrieved a list of Org models from a FastAPI endpoint call
-async def create_orgs(org_list: List[Org]):
-    await Org.create_list(org_list)
-
+```python
+org_list = [
+    Org(name="org1", slug="org-slug1"),
+    Org(name="org2", slug="org-slug2"),
+    Org(name="org3", slug="org-slug3"),
+]
+await Org.create_list(org_list)
 ```
 This function will insert all records into your database table in one batch.
 
 
 If you have a use case that requires deleting a bunch of records based on some field value, you can use `delete_records`:
-```
+
+```python
 # Delete all records with the tag "green"
 await Org.delete_records(tag="green")
 
@@ -140,16 +145,21 @@ await Org.delete_records(tag=["green", "blue", "red"])
 
 Sometimes you may want to update the value of a record in a database without having to fetch it first. This can be accomplished by using
 the `update_record` function:
-```
-async def change_org_tag(org_id: UUID_STR, tag: str):
-    await Org.update_record(id=org_id, tag=tag)
+
+```python
+await Org.update_record(
+    id="05c0060c-ceb8-40f0-8faa-dfb91266a6cf", 
+    tag="blue"
+)
+org = await Org.get("05c0060c-ceb8-40f0-8faa-dfb91266a6cf")
+assert org.tag == "blue"
 ```
 
 #### Complex queries
 Sometimes your application will require performing complex queries, such as getting the count of each unique field value for all records in the table.
 Because Pynocular is backed by SQLAlchemy, we can access table columns directly to write pure SQLAlchemy queries as well!
 
-```
+```python
 from sqlalchemy import func, select
 from pynocular.engines import DBEngine
 async def generate_org_stats():
@@ -175,7 +185,7 @@ When you decorate a Pydantic model with Pynocular, it creates a SQLAlchemy table
 (although accessing private variables is not recommended). Using this, along with Pynocular's `create_tracked_table` function, allows you to create tables
 in your database based off of Pydantic models!
 
-```
+```python
 from pynocular.db_utils import create_tracked_table
 
 from my_package import Org

@@ -1,4 +1,4 @@
-"""Utilities for interacting with SQL databases"""
+"""Aysnchronous ORM framework for Pydantic Models"""
 
 __version__ = "0.3.0"
 
