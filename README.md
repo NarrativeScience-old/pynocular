@@ -4,8 +4,9 @@
 
 Pynocular is a lightweight ORM that lets you query your database using Pydantic models and asyncio.
 
+
 With Pynocular you can decorate your existing Pydantic models to sync them with the corresponding table in your
-database, allowing you to persist changes without ever having to think about the database. Transaction management is 
+database, allowing you to persist changes without ever having to think about the database. Transaction management is
 automatically handled for you so you can focus on the important parts of your code. This integrates seamlessly with frameworks that use Pydantic models such as FastAPI.
 
 
@@ -148,7 +149,7 @@ the `update_record` function:
 
 ```python
 await Org.update_record(
-    id="05c0060c-ceb8-40f0-8faa-dfb91266a6cf", 
+    id="05c0060c-ceb8-40f0-8faa-dfb91266a6cf",
     tag="blue"
 )
 org = await Org.get("05c0060c-ceb8-40f0-8faa-dfb91266a6cf")
@@ -171,7 +172,7 @@ async def generate_org_stats():
     async with await DBEngine.transaction(Org._database_info, is_conditional=False) as conn:
         result = await conn.execute(query)
         return [dict(row) async for row in result]
-``` 
+```
 NOTE: `DBengine.transaction` is used to create a connection to the database using the credentials passed in.
 If `is_conditional` is `False`, then it will add the query to any transaction that is opened in the call chain. This allows us to make database calls
 in different functions but still have them all be under the same database transaction. If there is no transaction opened in the call chain it will open
