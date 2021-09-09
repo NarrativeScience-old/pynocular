@@ -167,8 +167,7 @@ If `is_conditional` is `False`, then it will add the query to any transaction th
 in different functions but still have them all be under the same database transaction. If there is no transaction opened in the call chain it will open
 a new one and any subsequent calls underneath that context manager will be added to the new transaction.
 
-If `is_conditional` is True then the connection will not create a new transaction if there are no open ones above it and instead will make the database call
-without using a transaction.
+If `is_conditional` is `True` and there is no transaction in the call chain, then the connection will not create a new transaction. Instead, the query will be performed without a transaction.
 
 
 ### Creating database tables
