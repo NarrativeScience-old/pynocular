@@ -105,7 +105,7 @@ orgs = await Org.get_list(tag=["green", "blue", "red"])
 ```
 
 With Pynocular you can set fields to be optional and set by the database. This is useful
-if you want to let the database autogenerate your primary key or created_at and updated_at fields
+if you want to let the database autogenerate your primary key or `created_at` and `updated_at` fields
 on your table. To do this you must:
 * Wrap the typehint in `Optional`
 * Set the `fetch_on_create=True` or `fetch_on_update=True` on `Field`
