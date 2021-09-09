@@ -1,6 +1,6 @@
 # pynocular
 
-Pynocular is a package giving you the ability to asynchronously interact with your database using Pydantic models.
+Pynocular is a lightweight ORM that lets you query your database using Pydantic models and asyncio.
 
 With Pynocular you can decorate your existing Pydantic models to sync them with the corresponding table in your
 database, allowing you to persist changes without ever having to think about the database. Transaction management is 
