@@ -111,7 +111,7 @@ on your table. To do this you must:
 * Provide keyword arguments of `fetch_on_create=True` or `fetch_on_update=True` to the `Field` class
 
 ### Advanced Usage
-For most use cases the basic usage defined above should suffice, however there are certain situations
+For most use cases, the basic usage defined above should suffice. However, there are certain situations
 where you don't necessarily want to fetch each object or you need to do more complex queries that
 are not exposed by the `DatabaseModel` interface. Below are some examples of how those situations can
 be addressed using Pynocular.
