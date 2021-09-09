@@ -43,7 +43,7 @@ The first step is to define a `DBInfo` object. This will contain the connection 
 from pynocular.engines import DatabaseType, DBInfo
 
 
-# Example below is connecting to local postgres
+# Example below shows how to connect to a locally-running Postgres database
 connection_string = f"postgresql://{db_user_name}:{db_user_password}@localhost:5432/{db_name}?sslmode=disable"
 )
 db_info = DBInfo(DatabaseType.aiopg_engine, connection_string)
