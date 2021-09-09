@@ -108,7 +108,7 @@ With Pynocular you can set fields to be optional and set by the database. This i
 if you want to let the database autogenerate your primary key or `created_at` and `updated_at` fields
 on your table. To do this you must:
 * Wrap the typehint in `Optional`
-* Set the `fetch_on_create=True` or `fetch_on_update=True` on `Field`
+* Provide keyword arguments of `fetch_on_create=True` or `fetch_on_update=True` to the `Field` class
 
 ### Advanced Usage
 For most use cases the basic usage defined above should suffice, however there are certain situations
