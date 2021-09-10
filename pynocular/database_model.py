@@ -1,8 +1,9 @@
 """Base Model class that implements CRUD methods for database entities based on Pydantic dataclasses"""
+import asyncio
 from datetime import datetime
 from enum import Enum, EnumMeta
 import inspect
-from typing import Any, Dict, Generator, List, Optional, Sequence
+from typing import Any, Callable, Dict, Generator, List, Optional, Sequence, Set, Union
 from uuid import UUID as stdlib_uuid
 
 from aenum import Enum as AEnum, EnumMeta as AEnumMeta
@@ -34,6 +35,7 @@ from pynocular.exceptions import (
     InvalidMethodParameterization,
     InvalidTextRepresentation,
 )
+from pynocular.foreign_reference import ForeignReferenceModel
 
 
 def is_valid_uuid(string: str) -> bool:
@@ -73,6 +75,34 @@ class UUID_STR(str):
             return str(v)
         else:
             raise ValueError("invalid UUID string")
+
+
+def foreign_key(
+    db_model_class: "DatabaseModel", reference_field: str = None
+) -> Callable:
+    """Generate a ForeignKey class with dynamic inheritance"""
+
+    class ForeignKey:
+        """ForeignKey type for DatabaseModels"""
+
+        reference_field_name = reference_field
+
+        @classmethod
+        def __get_validators__(cls) -> Generator:
+            """Get the validators for the given class"""
+            yield cls.validate
+
+        @classmethod
+        def validate(cls, v: Union[UUID_STR, "DatabaseModel"]) -> ForeignReferenceModel:
+            """Validate value and generate foreign reference model"""
+            # If value is a uuid then create a ForeignReferenceModel, otherwise just
+            # Set the DatabaseModel as the value
+            if is_valid_uuid(v):
+                return ForeignReferenceModel(db_model_class, v)
+            else:
+                return ForeignReferenceModel(db_model_class, v.get_id(), v)
+
+    return ForeignKey
 
 
 def database_model(table_name: str, database_info: DBInfo) -> "DatabaseModel":
@@ -127,6 +157,18 @@ class DatabaseModel:
     # These are the server_default and server_onupdate functions in SQLAlchemy
     _db_managed_fields: List[str] = None
 
+    # The following tables track which attributes on the model are foreign key
+    # references
+    # Some foreign key attributes may have different names than their actual db table;
+    # For example; on an App we may have an `org` attribute but the db field is
+    # `organzation_id`
+
+    # In order to manage this we also need maps from attribute name to table_field_name
+    # and back
+    _foreign_key_attributes: Set[str] = None
+    _foreign_attr_table_field_map: Dict[str, str] = None
+    _foreign_table_field_attr_map: Dict[str, str] = None
+
     # This can be used to access the table when defining where expressions
     columns: ImmutableColumnCollection = None
 
@@ -149,6 +191,9 @@ class DatabaseModel:
         cls._primary_keys = []
         cls._database_info = database_info
         cls._db_managed_fields = []
+        cls._foreign_attr_table_field_map = {}
+        cls._foreign_table_field_attr_map = {}
+        cls._foreign_key_attributes = set()
 
         columns = []
         for field in cls.__fields__.values():
@@ -158,7 +203,6 @@ class DatabaseModel:
             fetch_on_create = field.field_info.extra.get("fetch_on_create", False)
             fetch_on_update = field.field_info.extra.get("fetch_on_update", False)
 
-            type = None
             if field.type_ is str:
                 type = VARCHAR
             elif field.type_.__name__ == "ConstrainedStrValue":
@@ -186,6 +230,21 @@ class DatabaseModel:
                 type = sqlalchemy_uuid()
             elif field.type_ is datetime:
                 type = TIMESTAMP(timezone=True)
+            elif field.type_.__name__ == "ForeignKey":
+                cls._foreign_key_attributes.add(name)
+                # If the field name on the ForeignKey type is not none, use that for the
+                # column name
+                if field.type_.reference_field_name is not None:
+                    cls._foreign_attr_table_field_map[
+                        name
+                    ] = field.type_.reference_field_name
+                    cls._foreign_table_field_attr_map[
+                        field.type_.reference_field_name
+                    ] = name
+                    name = field.type_.reference_field_name
+
+                # Assume all IDs are UUIDs for now
+                type = sqlalchemy_uuid()
             # TODO - how are people using this today? Is there a class we need to make or can we reuse one
             # elif field.type_ is bit:
             #     type = Bit
@@ -229,6 +288,7 @@ class DatabaseModel:
                 combination of parameters is invalid.
 
         """
+        resolve_references = kwargs.pop("resolve_references", False)
         if (
             (len(args) > 1)
             or (len(args) == 1 and len(kwargs) > 0)
@@ -252,7 +312,16 @@ class DatabaseModel:
         if len(records) == 0:
             raise DatabaseRecordNotFound(cls._table.name, **original_primary_key_dict)
 
-        return records[0]
+        record = records[0]
+        gatherables = []
+        if resolve_references:
+            gatherables = [
+                (getattr(record, prop_name)).resolve_ref()
+                for prop_name in cls._foreign_key_attributes
+            ]
+            await asyncio.gather(*gatherables)
+
+        return record
 
     @classmethod
     async def get_list(cls, **kwargs: Any) -> List["DatabaseModel"]:
@@ -274,6 +343,9 @@ class DatabaseModel:
         where_clause_list = []
         for db_field_name, db_field_value in kwargs.items():
             try:
+                if db_field_name in cls._foreign_attr_table_field_map:
+                    db_field_name = cls._foreign_attr_table_field_map[db_field_name]
+
                 db_field = getattr(cls._table.c, db_field_name)
             except AttributeError:
                 raise DatabaseModelMissingField(cls.__name__, db_field_name)
@@ -327,7 +399,7 @@ class DatabaseModel:
                 raise InvalidFieldValue(message=e.diag.message_primary)
             records = await result.fetchall()
 
-            return [cls(**dict(record)) for record in records]
+            return [cls.from_dict(dict(record)) for record in records]
 
     @classmethod
     async def create(cls, **data) -> "DatabaseModel":
@@ -363,7 +435,7 @@ class DatabaseModel:
 
         values = []
         for model in models:
-            dict_obj = model.dict()
+            dict_obj = model.to_dict()
             for field in cls._db_managed_fields:
                 # Remove any fields that the database calculates
                 del dict_obj[field]
@@ -403,6 +475,9 @@ class DatabaseModel:
         where_clause_list = []
         for db_field_name, db_field_value in kwargs.items():
             try:
+                if db_field_name in cls._foreign_attr_table_field_map:
+                    db_field_name = cls._foreign_attr_table_field_map[db_field_name]
+
                 db_field = getattr(cls._table.c, db_field_name)
             except AttributeError:
                 raise DatabaseModelMissingField(cls.__name__, db_field_name)
@@ -445,7 +520,13 @@ class DatabaseModel:
             where_expressions.append(primary_key == primary_key_value)
             primary_key_dict[primary_key.name] = primary_key_value
 
-        updated_records = await cls.update(where_expressions, kwargs)
+        modified_kwargs = {}
+        for db_field_name, value in kwargs.items():
+            if db_field_name in cls._foreign_attr_table_field_map:
+                db_field_name = cls._foreign_attr_table_field_map[db_field_name]
+            modified_kwargs[db_field_name] = value
+
+        updated_records = await cls.update(where_expressions, modified_kwargs)
         if len(updated_records) == 0:
             raise DatabaseRecordNotFound(cls._table.name, **primary_key_dict)
         return updated_records[0]
@@ -484,11 +565,11 @@ class DatabaseModel:
             except InvalidTextRepresentation as e:
                 raise InvalidFieldValue(message=e.diag.message_primary)
 
-            return [cls(**dict(record)) for record in await results.fetchall()]
+            return [cls.from_dict(dict(record)) for record in await results.fetchall()]
 
     async def save(self) -> None:
         """Update the database record this object represents with its current state"""
-        dict_self = self.dict()
+        dict_self = self.to_dict()
 
         primary_key_names = [primary_key.name for primary_key in self._primary_keys]
 
@@ -513,6 +594,20 @@ class DatabaseModel:
 
             for field in self._db_managed_fields:
                 setattr(self, field, row[field])
+
+    def get_id(self) -> Any:
+        """Standard interface for returning the id of a field
+
+        This assumes that there is a single primary id, otherwise this returns `None`
+
+        Returns:
+            The ID value for this DatabaseModel instance
+
+        """
+        if len(self._primary_keys) > 1:
+            return None
+
+        return getattr(self, self._primary_keys[0].name)
 
     async def delete(self) -> None:
         """Delete this record from the database"""
@@ -546,7 +641,12 @@ class DatabaseModel:
             The DatabaseModel object
 
         """
-        return cls(**_dict)
+        modified_dict = {}
+        for key, value in _dict.items():
+            if key in cls._foreign_table_field_attr_map:
+                key = cls._foreign_table_field_attr_map[key]
+            modified_dict[key] = value
+        return cls(**modified_dict)
 
     def to_dict(
         self, serialize: bool = False, include_keys: Optional[Sequence] = None
@@ -577,6 +677,13 @@ class DatabaseModel:
                     prop_value = prop_value.name
                 elif isinstance(prop_value, AEnum):
                     prop_value = prop_value.value
+
+            if prop_name in self._foreign_key_attributes:
+                # self.dict() will serialize any BaseModels into a dict so fetch the
+                # actual object from self
+                temp_prop_value = getattr(self, prop_name)
+                prop_name = self._foreign_attr_table_field_map.get(prop_name, prop_name)
+                prop_value = temp_prop_value.get_id()
 
             if not include_keys or prop_name in include_keys:
                 _dict[prop_name] = prop_value
