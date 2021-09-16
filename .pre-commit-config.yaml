@@ -18,6 +18,16 @@ repos:
         stages: [commit]
       - id: check-merge-conflict
       - id: debug-statements
+      - id: detect-aws-credentials
+        args: [ --allow-missing-credentials ]
+      - id: detect-private-key
+      - id: end-of-file-fixer
+        exclude: |
+          (?x)^(
+            .circleci/config.yml
+          )$
+        # Need to define stages explicitly since `default_stages` was not being respected
+        stages: [ commit ]
       - id: forbid-new-submodules
       - id: no-commit-to-branch
       - id: trailing-whitespace
@@ -54,6 +64,11 @@ repos:
         language: python
         types: [file, python]
         additional_dependencies: [pydocstyle==5.0.2]
+        exclude: >
+          (?x)^(
+            .*__init__.py$|
+            .*setup.py$
+          )$
 
       - id: flake8
         name: Lint Python (flake8)
@@ -64,3 +79,9 @@ repos:
           - flake8==3.7.9
           - "flake8-import-order<0.19,>=0.18"
           - flake8-print>=3.1.4,<4
+
+      - id: circleci-config
+        name: Pack the CircleCI config
+        entry: .githooks/pre-commit-scripts/circleci.sh
+        language: script
+        files: '^\.circleci/'
