@@ -25,7 +25,7 @@ class ForeignReferenceModel:
         self._primary_key_name = model_cls._primary_keys[0].name
         setattr(self, self._primary_key_name, _id)
 
-    def get_id(self) -> Any:
+    def get_primary_id(self) -> Any:
         """Standard interface for returning the id of a field
 
         Returns:
@@ -34,7 +34,7 @@ class ForeignReferenceModel:
         """
         return getattr(self, self._primary_key_name)
 
-    async def resolve_ref(self) -> None:
+    async def fetch(self) -> None:
         """Resolves the reference via the id set"""
         if self._model is None:
             self._model = await self._model_cls.get(

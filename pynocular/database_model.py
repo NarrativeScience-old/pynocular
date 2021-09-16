@@ -100,7 +100,7 @@ def foreign_key(
             if is_valid_uuid(v):
                 return ForeignReferenceModel(db_model_class, v)
             else:
-                return ForeignReferenceModel(db_model_class, v.get_id(), v)
+                return ForeignReferenceModel(db_model_class, v.get_primary_id(), v)
 
     return ForeignKey
 
@@ -316,7 +316,7 @@ class DatabaseModel:
         gatherables = []
         if resolve_references:
             gatherables = [
-                (getattr(record, prop_name)).resolve_ref()
+                (getattr(record, prop_name)).fetch()
                 for prop_name in cls._foreign_key_attributes
             ]
             await asyncio.gather(*gatherables)
@@ -595,7 +595,7 @@ class DatabaseModel:
             for field in self._db_managed_fields:
                 setattr(self, field, row[field])
 
-    def get_id(self) -> Any:
+    def get_primary_id(self) -> Any:
         """Standard interface for returning the id of a field
 
         This assumes that there is a single primary id, otherwise this returns `None`
@@ -608,6 +608,18 @@ class DatabaseModel:
             return None
 
         return getattr(self, self._primary_keys[0].name)
+
+    async def fetch(self) -> None:
+        """Gets the latest of the object from the database and updates itself"""
+
+        # Get the latest version of self
+        new_self = await self.get(**{
+            primary_key.name: getattr(self, primary_key.name)
+            for primary_key in self._primary_keys
+        })
+
+        import pdb;pdb.set_trace()
+        self = new_self
 
     async def delete(self) -> None:
         """Delete this record from the database"""
@@ -683,7 +695,7 @@ class DatabaseModel:
                 # actual object from self
                 temp_prop_value = getattr(self, prop_name)
                 prop_name = self._foreign_attr_table_field_map.get(prop_name, prop_name)
-                prop_value = temp_prop_value.get_id()
+                prop_value = temp_prop_value.get_primary_id()
 
             if not include_keys or prop_name in include_keys:
                 _dict[prop_name] = prop_value

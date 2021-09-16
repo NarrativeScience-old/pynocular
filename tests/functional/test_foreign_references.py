@@ -90,7 +90,7 @@ loop.run_until_complete(setup_db_and_tables())
 
 
 @pytest.mark.asyncio
-async def test_resolve_ref() -> None:
+async def test_fetch() -> None:
     """Test that we can resolve the reference for a foreign key"""
     org_id = str(uuid4())
     serial_id = 104
@@ -110,7 +110,7 @@ async def test_resolve_ref() -> None:
 
         app_get = await App.get(app.id)
         assert app_get.org.id == org.id
-        await app_get.org.resolve_ref()
+        await app_get.org.fetch()
         assert app_get.org == org
     finally:
         await org.delete()
@@ -153,7 +153,7 @@ async def test_swap_foreign_reference() -> None:
         await app_get.save()
         app_get = await App.get(app.id)
         assert app_get.org.id == org2.id
-        await app_get.org.resolve_ref()
+        await app_get.org.fetch()
         assert app_get.org == org2
     finally:
         await org1.delete()
@@ -210,6 +210,7 @@ async def test_nested_foreign_references() -> None:
             id=str(uuid4()), name="topic name", app=app, filter_hash="sdfasdf"
         )
 
+        await topic.app.fetch()
         assert topic.app.id == app.id
         assert topic.app == app
         assert topic.app.org.id == org.id
