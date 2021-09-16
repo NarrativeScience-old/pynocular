@@ -1,6 +1,8 @@
 """Class that wraps Foreign Key models"""
 from typing import Any, Callable
 
+from pynocular.exceptions import ForeignReferenceNotResolved
+
 
 class ForeignReferenceModel:
     """Class that holds a foreign key reference to another model"""
@@ -54,7 +56,7 @@ class ForeignReferenceModel:
 
         """
         if self._model is None:
-            raise AttributeError
+            raise ForeignReferenceNotResolved(self._model_cls, self.get_primary_id())
         else:
             return getattr(self._model, attr_name)
 

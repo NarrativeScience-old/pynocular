@@ -272,8 +272,29 @@ class DatabaseModel:
         cls.columns = cls._table.c
 
     @classmethod
+    async def get_with_refs(cls, *args: Any, **kwargs: Any) -> "DatabaseModel":
+        """Gets the DatabaseModel associated with any foreign key references resolved
+
+        Args:
+            args: The column id for the object's primary key
+            kwargs: The columns and ids that make up the object's composite primary key
+
+        Returns:
+            A DatabaseModel object representing the record in the db if one exists
+
+        """
+        obj = await cls.get(*args, **kwargs)
+        gatherables = [
+            (getattr(obj, prop_name)).fetch()
+            for prop_name in cls._foreign_key_attributes
+        ]
+        await asyncio.gather(*gatherables)
+
+        return obj
+
+    @classmethod
     async def get(cls, *args: Any, **kwargs: Any) -> "DatabaseModel":
-        """Fetches the DatabaseModel for the given primary key value(s)
+        """Gets the DatabaseModel for the given primary key value(s)
 
         Args:
             args: The column id for the object's primary key
@@ -288,7 +309,6 @@ class DatabaseModel:
                 combination of parameters is invalid.
 
         """
-        resolve_references = kwargs.pop("resolve_references", False)
         if (
             (len(args) > 1)
             or (len(args) == 1 and len(kwargs) > 0)
@@ -312,16 +332,7 @@ class DatabaseModel:
         if len(records) == 0:
             raise DatabaseRecordNotFound(cls._table.name, **original_primary_key_dict)
 
-        record = records[0]
-        gatherables = []
-        if resolve_references:
-            gatherables = [
-                (getattr(record, prop_name)).fetch()
-                for prop_name in cls._foreign_key_attributes
-            ]
-            await asyncio.gather(*gatherables)
-
-        return record
+        return records[0]
 
     @classmethod
     async def get_list(cls, **kwargs: Any) -> List["DatabaseModel"]:
@@ -624,8 +635,10 @@ class DatabaseModel:
             primary_key.name: getattr(self, primary_key.name)
             for primary_key in self._primary_keys
         }
-        get_params["resolve_references"] = resolve_references
-        new_self = await self.get(**get_params)
+        if resolve_references:
+            new_self = await self.get_with_refs(**get_params)
+        else:
+            new_self = await self.get(**get_params)
 
         for attr_name, new_attr_val in new_self.dict().items():
             setattr(self, attr_name, new_attr_val)
@@ -703,7 +716,9 @@ class DatabaseModel:
                 # actual object from self
                 temp_prop_value = getattr(self, prop_name)
                 prop_name = self._foreign_attr_table_field_map.get(prop_name, prop_name)
-                prop_value = temp_prop_value.get_primary_id()
+                # temp_prop_value can be `None` if the foreign key is optional
+                if temp_prop_value is not None:
+                    prop_value = temp_prop_value.get_primary_id()
 
             if not include_keys or prop_name in include_keys:
                 _dict[prop_name] = prop_value
