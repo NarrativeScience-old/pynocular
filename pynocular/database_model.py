@@ -341,11 +341,12 @@ class DatabaseModel:
 
         """
         where_clause_list = []
-        for db_field_name, db_field_value in kwargs.items():
-            try:
-                if db_field_name in cls._foreign_attr_table_field_map:
-                    db_field_name = cls._foreign_attr_table_field_map[db_field_name]
+        for field_name, db_field_value in kwargs.items():
+            db_field_name = cls._foreign_attr_table_field_map.get(
+                field_name, field_name
+            )
 
+            try:
                 db_field = getattr(cls._table.c, db_field_name)
             except AttributeError:
                 raise DatabaseModelMissingField(cls.__name__, db_field_name)
@@ -473,11 +474,12 @@ class DatabaseModel:
 
         """
         where_clause_list = []
-        for db_field_name, db_field_value in kwargs.items():
-            try:
-                if db_field_name in cls._foreign_attr_table_field_map:
-                    db_field_name = cls._foreign_attr_table_field_map[db_field_name]
+        for field_name, db_field_value in kwargs.items():
+            db_field_name = cls._foreign_attr_table_field_map.get(
+                field_name, field_name
+            )
 
+            try:
                 db_field = getattr(cls._table.c, db_field_name)
             except AttributeError:
                 raise DatabaseModelMissingField(cls.__name__, db_field_name)
@@ -521,9 +523,10 @@ class DatabaseModel:
             primary_key_dict[primary_key.name] = primary_key_value
 
         modified_kwargs = {}
-        for db_field_name, value in kwargs.items():
-            if db_field_name in cls._foreign_attr_table_field_map:
-                db_field_name = cls._foreign_attr_table_field_map[db_field_name]
+        for field_name, value in kwargs.items():
+            db_field_name = cls._foreign_attr_table_field_map.get(
+                field_name, field_name
+            )
             modified_kwargs[db_field_name] = value
 
         updated_records = await cls.update(where_expressions, modified_kwargs)
@@ -661,9 +664,8 @@ class DatabaseModel:
         """
         modified_dict = {}
         for key, value in _dict.items():
-            if key in cls._foreign_table_field_attr_map:
-                key = cls._foreign_table_field_attr_map[key]
-            modified_dict[key] = value
+            modified_key = cls._foreign_table_field_attr_map.get(key, key)
+            modified_dict[modified_key] = value
         return cls(**modified_dict)
 
     def to_dict(
