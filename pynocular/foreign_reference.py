@@ -9,7 +9,7 @@ class ForeignReferenceModel:
         self,
         model_cls: Callable,
         _id: Any,
-        model: "DatabaseModel" = None,
+        model: "DatabaseModel" = None,  # noqa
     ) -> None:
         """Init for ForeignReferenceModel
 
