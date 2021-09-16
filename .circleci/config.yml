@@ -220,7 +220,16 @@ executors:
         resource_class: small
     python-medium:
         docker:
-            - image: cimg/python:3.6
+            - environment:
+                DB_USER_NAME: postgres
+                DB_USER_PASSWORD: $CIRCLE_SHA1
+                EXISTING_DB_NAME: circle_test
+                TEST_DB_NAME: test_db
+              image: cimg/python:3.6
+            - environment:
+                POSTGRES_PASSWORD: $CIRCLE_SHA1
+                POSTGRES_USER: postgres
+              image: circleci/postgres:11-alpine-ram
         resource_class: medium
 jobs:
     build-test:
