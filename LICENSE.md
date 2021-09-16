@@ -1,4 +1,4 @@
-Copyright (c) 2020, Narrative Science
+Copyright (c) 2021, Narrative Science
 
 All rights reserved.
 
