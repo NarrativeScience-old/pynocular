@@ -6,8 +6,8 @@
       "package_name": "pynocular",
       "description": "Lightweight ORM that lets you query your database using Pydantic models and asyncio",
       "visibility": "public",
-      "full_name": "Jonathan Drake",
-      "email": "jdrake@narrativescience.com",
+      "full_name": "Narrative Science",
+      "email": "contrib@narrativescience.com",
       "_template": "https://github.com/NarrativeScience/cookiecutter-python-lib"
     }
   },
