@@ -28,6 +28,7 @@ pre-commit = "^2.10.1"
 pytest = "^6.2.2"
 pytest-asyncio = "^0.15"
 black = {version = "^21.7b0", allow-prereleases = true}
+cruft = "^2.9.0"
 
 [tool.cruft]
 skip = ["pyproject.toml", "pynocular", "tests", "README.md", ".circleci/config.yml"]
