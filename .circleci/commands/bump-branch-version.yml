@@ -1,0 +1,5 @@
+description: Bump package version via a git commit
+steps:
+  - run:
+      name: Bump package version
+      command: .circleci/scripts/bump-version.sh "$GITHUB_PR_BASE_BRANCH" "$CIRCLE_BRANCH"

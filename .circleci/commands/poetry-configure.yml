@@ -1,0 +1,8 @@
+description: Configure Poetry
+steps:
+  - run:
+      name: Configure Poetry
+      command: |
+        pip install -U pip setuptools
+        pip install poetry
+        poetry config pypi-token.pypi "$POETRY_PYPI_TOKEN_PYPI"

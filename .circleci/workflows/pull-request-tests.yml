@@ -1,0 +1,7 @@
+jobs:
+  - build-test:
+      context: opensource
+      filters:
+        branches:
+          ignore:
+            - main
