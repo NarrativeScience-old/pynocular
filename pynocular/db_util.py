@@ -7,8 +7,8 @@ from aiopg.sa.connection import SAConnection
 import sqlalchemy as sa
 from sqlalchemy.sql.ddl import CreateTable
 
-from ns_sql_utils.engines import DatabaseType, DBEngine, DBInfo
-from ns_sql_utils.exceptions import InvalidSqlIdentifierErr
+from pynocular.engines import DatabaseType, DBEngine, DBInfo
+from pynocular.exceptions import InvalidSqlIdentifierErr
 
 logger = logging.getLogger()
 

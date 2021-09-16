@@ -17,11 +17,11 @@ import backoff
 from sqlalchemy import create_engine as create_engine_sync
 from sqlalchemy.engine import Engine as SyncEngine
 
-from ns_sql_utils.aiopg_transaction import (
+from pynocular.aiopg_transaction import (
     ConditionalTransaction,
     transaction as Transaction,
 )
-from ns_sql_utils.config import DB_POOL_MAX_SIZE, DB_POOL_MIN_SIZE, POOL_RECYCLE
+from pynocular.config import DB_POOL_MAX_SIZE, DB_POOL_MIN_SIZE, POOL_RECYCLE
 
 logger = logging.getLogger(__name__)
 

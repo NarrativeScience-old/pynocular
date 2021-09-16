@@ -2,30 +2,34 @@
 import asyncio
 from asyncio import gather, sleep
 from datetime import datetime
+import os
 from typing import Optional
 from uuid import uuid4
 
-from ns_env_config import EnvConfig
 from pydantic import BaseModel, Field
 from pydantic.error_wrappers import ValidationError
 import pytest
 
-from ns_sql_utils.database_model import database_model, UUID_STR
-from ns_sql_utils.db_util import add_trigger, create_new_database, create_table
-from ns_sql_utils.engines import DatabaseType, DBEngine, DBInfo
-from ns_sql_utils.exceptions import DatabaseModelMissingField, DatabaseRecordNotFound
+from pynocular.database_model import database_model, UUID_STR
+from pynocular.db_util import add_trigger, create_new_database, create_table
+from pynocular.engines import DatabaseType, DBEngine, DBInfo
+from pynocular.exceptions import DatabaseModelMissingField, DatabaseRecordNotFound
 
-db_user_password = EnvConfig.string("DB_USER_PASSWORD")
+db_user_password = str(os.environ.get("DB_USER_PASSWORD"))
 # DB to initially connect to so we can create a new db
-existing_connection_string = EnvConfig.string(
-    "EXISTING_DB_CONNECTION_STRING",
-    f"postgresql://postgres:{db_user_password}@localhost:5432/postgres?sslmode=disable",
+existing_connection_string = str(
+    os.environ.get(
+        "EXISTING_DB_CONNECTION_STRING",
+        f"postgresql://postgres:{db_user_password}@localhost:5432/postgres?sslmode=disable",
+    )
 )
 
-test_db_name = EnvConfig.string("TEST_DB_NAME", "test_db")
-test_connection_string = EnvConfig.string(
-    "TEST_DB_CONNECTION_STRING",
-    f"postgresql://postgres:{db_user_password}@localhost:5432/{test_db_name}?sslmode=disable",
+test_db_name = str(os.environ.get("TEST_DB_NAME", "test_db"))
+test_connection_string = str(
+    os.environ.get(
+        "TEST_DB_CONNECTION_STRING",
+        f"postgresql://postgres:{db_user_password}@localhost:5432/{test_db_name}?sslmode=disable",
+    )
 )
 testdb = DBInfo(DatabaseType.aiopg_engine, test_connection_string)
 
