@@ -1,4 +1,4 @@
-"""Aysnchronous ORM framework for Pydantic Models"""
+"""Lightweight ORM that lets you query your database using Pydantic models and asyncio"""
 
 __version__ = "0.3.0"
 
