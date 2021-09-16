@@ -1,0 +1,11 @@
+description: Publish a release of the project
+executor: default
+steps:
+  - aws-cli/install
+  - checkout
+  - conditional-cancel:
+      cancel_if_tag_in_commit: "[skip publish]"
+  - poetry-configure
+  - run: poetry install
+  - run: poetry build
+  - run: poetry publish

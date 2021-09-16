@@ -1,0 +1,44 @@
+description: Cancel the current job based on an environment variable
+parameters:
+  method:
+    description: |
+      Method of cancellation; Either cancel the job or just halt the step so the job
+      still succeeds
+    type: enum
+    enum:
+      - cancel
+      - halt
+    default: cancel
+steps:
+  - run:
+      name: Cancel the job
+      command: |
+        echo "CANCEL_JOB=$CANCEL_JOB"
+        [[ -z "$CANCEL_JOB" ]] && exit 0
+        set -e
+        if [[ "<< parameters.method >>" == "cancel" ]]; then
+          OUTPUT=$(
+            curl \
+              --user "${CIRCLE_API_USER_TOKEN}:" \
+              -X POST \
+              --max-time 60 \
+              --connect-timeout 60 \
+              "https://circleci.com/api/v1.1/project/github/${CIRCLE_PROJECT_USERNAME}/${CIRCLE_PROJECT_REPONAME}/${CIRCLE_BUILD_NUM}/cancel")
+          echo "$OUTPUT"
+          STATUS="$(echo "$OUTPUT" | jq -r .status -)"
+          if [[ "$STATUS" == 'canceled' ]]; then
+            # This means the job was cancelled but for some reason the current script is
+            # still running. Wait a few seconds to let it catch up then fail the job to
+            # prevent downstream jobs from running unintentionally.
+            sleep 10
+            exit 1
+          fi
+          echo "Failed to cancel job"
+          exit 1
+        elif [[ "<< parameters.method >>" == "halt" ]]; then
+          # Halt the job and mark it as successful
+          circleci step halt
+        else
+          echo "Unknown cancel method: << parameters.method >>"
+          exit 1
+        fi

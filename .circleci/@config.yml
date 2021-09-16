@@ -1,0 +1,7 @@
+version: 2.1
+
+orbs:
+  aws-cli: circleci/aws-cli@2.0.3
+  circleci-cli: circleci/circleci-cli@0.1.9
+  ghpr: narrativescience/ghpr@1.1.2
+  github-cli: circleci/github-cli@1.0.3

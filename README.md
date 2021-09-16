@@ -8,7 +8,6 @@ With Pynocular you can decorate your existing Pydantic models to sync them with 
 database, allowing you to persist changes without ever having to think about the database. Transaction management is
 automatically handled for you so you can focus on the important parts of your code. This integrates seamlessly with frameworks that use Pydantic models such as FastAPI.
 
-
 Features:
 
 - Fully supports asyncio to write to SQL databases
@@ -21,6 +20,9 @@ Table of Contents:
 
 - [Installation](#installation)
 - [Guide](#guide)
+  - [Basic Usage](#basic-usage)
+  - [Advanced Usage](#advanced-usage)
+  - [Creating database tables](#creating-database-tables)
 - [Development](#development)
 
 ## Installation
@@ -36,6 +38,7 @@ poetry add pynocular
 ## Guide
 
 ### Basic Usage
+
 Pynocular works by decorating your base Pydantic model with the function `database_model`. Once decorated
 with the proper information, you can proceed to use that model to interface with your specified database table.
 
@@ -109,16 +112,19 @@ orgs = await Org.get_list(tag=["green", "blue", "red"])
 With Pynocular you can set fields to be optional and set by the database. This is useful
 if you want to let the database autogenerate your primary key or `created_at` and `updated_at` fields
 on your table. To do this you must:
-* Wrap the typehint in `Optional`
-* Provide keyword arguments of `fetch_on_create=True` or `fetch_on_update=True` to the `Field` class
+
+- Wrap the typehint in `Optional`
+- Provide keyword arguments of `fetch_on_create=True` or `fetch_on_update=True` to the `Field` class
 
 ### Advanced Usage
+
 For most use cases, the basic usage defined above should suffice. However, there are certain situations
 where you don't necessarily want to fetch each object or you need to do more complex queries that
 are not exposed by the `DatabaseModel` interface. Below are some examples of how those situations can
 be addressed using Pynocular.
 
 #### Batch operations on tables
+
 Sometimes you want to insert a bunch of records into a database and you don't want to do an insert for each one.
 This can be handled by the `create_list` function.
 
@@ -130,8 +136,8 @@ org_list = [
 ]
 await Org.create_list(org_list)
 ```
-This function will insert all records into your database table in one batch.
 
+This function will insert all records into your database table in one batch.
 
 If you have a use case that requires deleting a bunch of records based on some field value, you can use `delete_records`:
 
@@ -156,6 +162,7 @@ assert org.tag == "blue"
 ```
 
 #### Complex queries
+
 Sometimes your application will require performing complex queries, such as getting the count of each unique field value for all records in the table.
 Because Pynocular is backed by SQLAlchemy, we can access table columns directly to write pure SQLAlchemy queries as well!
 
@@ -172,6 +179,7 @@ async def generate_org_stats():
         result = await conn.execute(query)
         return [dict(row) async for row in result]
 ```
+
 NOTE: `DBengine.transaction` is used to create a connection to the database using the credentials passed in.
 If `is_conditional` is `False`, then it will add the query to any transaction that is opened in the call chain. This allows us to make database calls
 in different functions but still have them all be under the same database transaction. If there is no transaction opened in the call chain it will open
@@ -179,8 +187,8 @@ a new one and any subsequent calls underneath that context manager will be added
 
 If `is_conditional` is `True` and there is no transaction in the call chain, then the connection will not create a new transaction. Instead, the query will be performed without a transaction.
 
-
 ### Creating database tables
+
 When you decorate a Pydantic model with Pynocular, it creates a SQLAlchemy table as a private variable. This can be accessed via the `_table` property
 (although accessing private variables is not recommended). Using this, along with Pynocular's `create_tracked_table` function, allows you to create tables
 in your database based off of Pydantic models!

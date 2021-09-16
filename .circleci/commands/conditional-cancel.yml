@@ -1,0 +1,143 @@
+description: Cancel the current job based on various conditions
+parameters:
+  run_if_tag_in_commit:
+    description: Cancel the job if this tag is not in the current commit message
+    type: string
+    default: ""
+  cancel_if_tag_in_commit:
+    description: Cancel the job if this tag is in the current commit message
+    type: string
+    default: ""
+  cancel_if_tag_in_pr_title:
+    description: Cancel the job if this tag is in the pull request title
+    type: string
+    default: ""
+  run_if_paths_changed:
+    description: Cancel the job if these file paths did not change (space-separated list)
+    type: string
+    default: ""
+  run_only_if_all_paths_changed_match_pattern:
+    description: Cancel the job if any files changed besides the ones matched by this pattern (grep regex)
+    type: string
+    default: ""
+  cancel_if_paths_changed:
+    description: Cancel the job if these file paths did change (space-separated list)
+    type: string
+    default: ""
+  cancel_only_if_all_paths_changed_match_pattern:
+    description: Cancel the job if the only files changed match this pattern (grep regex)
+    type: string
+    default: ""
+  gitref:
+    default: $CIRCLE_BRANCH
+    type: string
+  method:
+    description: |
+      Method of cancellation; Either cancel the job or just halt the step so the job
+      still succeeds
+    type: enum
+    enum:
+      - cancel
+      - halt
+    default: cancel
+steps:
+  - run:
+      name: Set git diff commit range
+      command: |
+        COMMIT_RANGE="origin/master..origin/<< parameters.gitref >>"
+        echo "export COMMIT_RANGE=\"$COMMIT_RANGE\"" >> $BASH_ENV
+        echo $COMMIT_RANGE
+  - when:
+      condition: << parameters.run_if_tag_in_commit >>
+      steps:
+        - run:
+            name: |
+              Cancel the job if << parameters.run_if_tag_in_commit >> is not in the current
+              commit message (case insensitive)
+            command: |
+              shopt -s nocasematch
+              MESSAGE="$(git log -1 --pretty=%B)"
+              if [[ "$MESSAGE" != *'<< parameters.run_if_tag_in_commit >>'* ]]; then
+                echo 'export CANCEL_JOB=1' >> $BASH_ENV
+              fi
+              shopt -u nocasematch
+  - when:
+      condition: << parameters.cancel_if_tag_in_commit >>
+      steps:
+        - run:
+            name: |
+              Cancel the job if << parameters.cancel_if_tag_in_commit >> is in the current
+              commit message (case insensitive)
+            command: |
+              shopt -s nocasematch
+              MESSAGE="$(git log -1 --pretty=%B)"
+              if [[ "$MESSAGE" == *'<< parameters.cancel_if_tag_in_commit >>'* ]]; then
+                echo 'export CANCEL_JOB=1' >> $BASH_ENV
+              fi
+              shopt -u nocasematch
+  - when:
+      condition: << parameters.cancel_if_tag_in_pr_title >>
+      steps:
+        - run:
+            name: |
+              Cancel the job if << parameters.cancel_if_tag_in_pr_title >> is in the pull request
+              title (case insensitive)
+            command: |
+              shopt -s nocasematch
+              PR_NUMBER="$(echo "$CIRCLE_PULL_REQUEST" | sed 's/.*\/pull\///')"
+              URL="https://api.github.com/repos/NarrativeScience/talos/pulls/$PR_NUMBER"
+              PR_TITLE="$(curl --user "$GITHUB_USERNAME:$GITHUB_PASSWORD" "$URL" | jq '.title')"
+              if [[ "$PR_TITLE" == *'<< parameters.cancel_if_tag_in_pr_title >>'* ]]; then
+                echo 'export CANCEL_JOB=1' >> $BASH_ENV
+              fi
+              shopt -u nocasematch
+  - when:
+      condition: << parameters.run_if_paths_changed >>
+      steps:
+        - run:
+            name: Cancel the job if << parameters.run_if_paths_changed >> did not change
+            command: |
+              FILES="$(git diff --name-only $COMMIT_RANGE << parameters.run_if_paths_changed >>)"
+              if [[ ${#FILES} -eq 0 ]]; then
+                echo 'export CANCEL_JOB=1' >> $BASH_ENV
+              fi
+  - when:
+      condition: << parameters.run_only_if_all_paths_changed_match_pattern >>
+      steps:
+        - run:
+            name: Cancel the job if any files beside << parameters.run_only_if_all_paths_changed_match_pattern >> changed
+            command: |
+              GREP_PATTERN="<< parameters.run_only_if_all_paths_changed_match_pattern >>"
+              FILES="$(git --no-pager diff --name-only $COMMIT_RANGE)"
+              if [[ ${#FILES} -gt 0 ]]; then
+                FILTERED_FILES=$(echo "$FILES" | grep "$GREP_PATTERN") || true
+                if [[ "$FILES" != "$FILTERED_FILES" ]]; then
+                  echo 'export CANCEL_JOB=1' >> $BASH_ENV
+                fi
+              fi
+  - when:
+      condition: << parameters.cancel_if_paths_changed >>
+      steps:
+        - run:
+            name: Cancel the job if << parameters.cancel_if_paths_changed >> did change
+            command: |
+              FILES="$(git diff --name-only $COMMIT_RANGE << parameters.cancel_if_paths_changed >>)"
+              if [[ ${#FILES} -gt 0 ]]; then
+                echo 'export CANCEL_JOB=1' >> $BASH_ENV
+              fi
+  - when:
+      condition: << parameters.cancel_only_if_all_paths_changed_match_pattern >>
+      steps:
+        - run:
+            name: Cancel the job if the only files changed match << parameters.cancel_only_if_all_paths_changed_match_pattern >>
+            command: |
+              GREP_PATTERN="<< parameters.cancel_only_if_all_paths_changed_match_pattern >>"
+              FILES="$(git --no-pager diff --name-only $COMMIT_RANGE)"
+              if [[ ${#FILES} -gt 0 ]]; then
+                FILTERED_FILES=$(echo "$FILES" | grep -E "$GREP_PATTERN") || true
+                if [[ "$FILES" == "$FILTERED_FILES" ]]; then
+                  echo 'export CANCEL_JOB=1' >> $BASH_ENV
+                fi
+              fi
+  - cancel-job:
+      method: << parameters.method >>

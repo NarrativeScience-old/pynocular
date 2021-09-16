@@ -1,0 +1,9 @@
+description: Create a github release via the github CLI
+steps:
+  - github-cli/setup
+  - run:
+      name: Create GitHub Release
+      command: |
+        version="$(poetry version -s)"
+        notes="$(git show -s --format=%B HEAD)"
+        gh release create "v${version}" --title "Version ${version}" --notes "$notes"

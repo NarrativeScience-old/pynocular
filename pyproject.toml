@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "pynocular"
-version = "0.3.0"
-description = "Aysnchronous ORM framework for Pydantic Models"
+version = "0.4.0"
+description = "Lightweight ORM that lets you query your database using Pydantic models and asyncio"
 authors = [
   "RJ Santana <ssantana@narrativescience.com>",
   "Patrick Hennessy <phennessy@narrativescience.com>",
@@ -15,7 +15,7 @@ repository = "https://github.com/NarrativeScience/pynocular"
 [tool.poetry.dependencies]
 python = "^3.6.5"
 aenum = "^2.1"
-aiocontextvars = "=0.2.2"
+aiocontextvars = "==0.2.2"
 aiopg = "==0.16.0"
 asyncpg = "==0.15.0"
 asyncpgsa = "==0.23.0"
@@ -28,10 +28,10 @@ pre-commit = "^2.10.1"
 pytest = "^6.2.2"
 pytest-asyncio = "^0.15"
 black = {version = "^21.7b0", allow-prereleases = true}
+cruft = "^2.9.0"
 
-[[tool.poetry.source]]
-name = "codeartifact"
-url = "https://lexio-231405699240.d.codeartifact.us-east-1.amazonaws.com/pypi/lexio/simple/"
+[tool.cruft]
+skip = ["pyproject.toml", "pynocular", "tests", "README.md", ".circleci/config.yml"]
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
