@@ -35,7 +35,7 @@ from pynocular.exceptions import (
     InvalidMethodParameterization,
     InvalidTextRepresentation,
 )
-from pynocular.foreign_reference import ForeignReferenceModel
+from pynocular.nested_database_model import NestedDatabaseModel
 
 
 def is_valid_uuid(string: str) -> bool:
@@ -77,13 +77,13 @@ class UUID_STR(str):
             raise ValueError("invalid UUID string")
 
 
-def foreign_key(
+def nested_model(
     db_model_class: "DatabaseModel", reference_field: str = None
 ) -> Callable:
-    """Generate a ForeignKey class with dynamic inheritance"""
+    """Generate a NestedModel class with dynamic model references"""
 
-    class ForeignKey:
-        """ForeignKey type for DatabaseModels"""
+    class NestedModel:
+        """NestedModel type for NestedDatabaseModels"""
 
         reference_field_name = reference_field
 
@@ -93,16 +93,16 @@ def foreign_key(
             yield cls.validate
 
         @classmethod
-        def validate(cls, v: Union[UUID_STR, "DatabaseModel"]) -> ForeignReferenceModel:
-            """Validate value and generate foreign reference model"""
-            # If value is a uuid then create a ForeignReferenceModel, otherwise just
+        def validate(cls, v: Union[UUID_STR, "DatabaseModel"]) -> NestedDatabaseModel:
+            """Validate value and generate a nested database model"""
+            # If value is a uuid then create a NestedDatabaseModel, otherwise just
             # Set the DatabaseModel as the value
             if is_valid_uuid(v):
-                return ForeignReferenceModel(db_model_class, v)
+                return NestedDatabaseModel(db_model_class, v)
             else:
-                return ForeignReferenceModel(db_model_class, v.get_primary_id(), v)
+                return NestedDatabaseModel(db_model_class, v.get_primary_id(), v)
 
-    return ForeignKey
+    return NestedModel
 
 
 def database_model(table_name: str, database_info: DBInfo) -> "DatabaseModel":
@@ -157,17 +157,17 @@ class DatabaseModel:
     # These are the server_default and server_onupdate functions in SQLAlchemy
     _db_managed_fields: List[str] = None
 
-    # The following tables track which attributes on the model are foreign key
+    # The following tables track which attributes on the model are nested model
     # references
-    # Some foreign key attributes may have different names than their actual db table;
+    # Some nested model attributes may have different names than their actual db table;
     # For example; on an App we may have an `org` attribute but the db field is
     # `organzation_id`
 
     # In order to manage this we also need maps from attribute name to table_field_name
     # and back
-    _foreign_key_attributes: Set[str] = None
-    _foreign_attr_table_field_map: Dict[str, str] = None
-    _foreign_table_field_attr_map: Dict[str, str] = None
+    _nested_model_attributes: Set[str] = None
+    _nested_attr_table_field_map: Dict[str, str] = None
+    _nested_table_field_attr_map: Dict[str, str] = None
 
     # This can be used to access the table when defining where expressions
     columns: ImmutableColumnCollection = None
@@ -191,9 +191,9 @@ class DatabaseModel:
         cls._primary_keys = []
         cls._database_info = database_info
         cls._db_managed_fields = []
-        cls._foreign_attr_table_field_map = {}
-        cls._foreign_table_field_attr_map = {}
-        cls._foreign_key_attributes = set()
+        cls._nested_attr_table_field_map = {}
+        cls._nested_table_field_attr_map = {}
+        cls._nested_model_attributes = set()
 
         columns = []
         for field in cls.__fields__.values():
@@ -230,15 +230,15 @@ class DatabaseModel:
                 type = sqlalchemy_uuid()
             elif field.type_ is datetime:
                 type = TIMESTAMP(timezone=True)
-            elif field.type_.__name__ == "ForeignKey":
-                cls._foreign_key_attributes.add(name)
-                # If the field name on the ForeignKey type is not none, use that for the
+            elif field.type_.__name__ == "NestedModel":
+                cls._nested_model_attributes.add(name)
+                # If the field name on the NestedModel type is not None, use that for the
                 # column name
                 if field.type_.reference_field_name is not None:
-                    cls._foreign_attr_table_field_map[
+                    cls._nested_attr_table_field_map[
                         name
                     ] = field.type_.reference_field_name
-                    cls._foreign_table_field_attr_map[
+                    cls._nested_table_field_attr_map[
                         field.type_.reference_field_name
                     ] = name
                     name = field.type_.reference_field_name
@@ -273,7 +273,7 @@ class DatabaseModel:
 
     @classmethod
     async def get_with_refs(cls, *args: Any, **kwargs: Any) -> "DatabaseModel":
-        """Gets the DatabaseModel associated with any foreign key references resolved
+        """Gets the DatabaseModel associated with any nested key references resolved
 
         Args:
             args: The column id for the object's primary key
@@ -286,7 +286,7 @@ class DatabaseModel:
         obj = await cls.get(*args, **kwargs)
         gatherables = [
             (getattr(obj, prop_name)).fetch()
-            for prop_name in cls._foreign_key_attributes
+            for prop_name in cls._nested_model_attributes
         ]
         await asyncio.gather(*gatherables)
 
@@ -353,9 +353,7 @@ class DatabaseModel:
         """
         where_clause_list = []
         for field_name, db_field_value in kwargs.items():
-            db_field_name = cls._foreign_attr_table_field_map.get(
-                field_name, field_name
-            )
+            db_field_name = cls._nested_attr_table_field_map.get(field_name, field_name)
 
             try:
                 db_field = getattr(cls._table.c, db_field_name)
@@ -486,9 +484,7 @@ class DatabaseModel:
         """
         where_clause_list = []
         for field_name, db_field_value in kwargs.items():
-            db_field_name = cls._foreign_attr_table_field_map.get(
-                field_name, field_name
-            )
+            db_field_name = cls._nested_attr_table_field_map.get(field_name, field_name)
 
             try:
                 db_field = getattr(cls._table.c, db_field_name)
@@ -535,9 +531,7 @@ class DatabaseModel:
 
         modified_kwargs = {}
         for field_name, value in kwargs.items():
-            db_field_name = cls._foreign_attr_table_field_map.get(
-                field_name, field_name
-            )
+            db_field_name = cls._nested_attr_table_field_map.get(field_name, field_name)
             modified_kwargs[db_field_name] = value
 
         updated_records = await cls.update(where_expressions, modified_kwargs)
@@ -627,7 +621,7 @@ class DatabaseModel:
         """Gets the latest of the object from the database and updates itself
 
         Args:
-            resolve_references: If True, resolve any foreign key references
+            resolve_references: If True, resolve any nested key references
 
         """
         # Get the latest version of self
@@ -677,7 +671,7 @@ class DatabaseModel:
         """
         modified_dict = {}
         for key, value in _dict.items():
-            modified_key = cls._foreign_table_field_attr_map.get(key, key)
+            modified_key = cls._nested_table_field_attr_map.get(key, key)
             modified_dict[modified_key] = value
         return cls(**modified_dict)
 
@@ -711,12 +705,12 @@ class DatabaseModel:
                 elif isinstance(prop_value, AEnum):
                     prop_value = prop_value.value
 
-            if prop_name in self._foreign_key_attributes:
+            if prop_name in self._nested_model_attributes:
                 # self.dict() will serialize any BaseModels into a dict so fetch the
                 # actual object from self
                 temp_prop_value = getattr(self, prop_name)
-                prop_name = self._foreign_attr_table_field_map.get(prop_name, prop_name)
-                # temp_prop_value can be `None` if the foreign key is optional
+                prop_name = self._nested_attr_table_field_map.get(prop_name, prop_name)
+                # temp_prop_value can be `None` if the nested key is optional
                 if temp_prop_value is not None:
                     prop_value = temp_prop_value.get_primary_id()
 

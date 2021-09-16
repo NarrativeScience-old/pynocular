@@ -8,7 +8,7 @@ from uuid import uuid4
 from pydantic import BaseModel, Field
 import pytest
 
-from pynocular.database_model import database_model, foreign_key, UUID_STR
+from pynocular.database_model import database_model, nested_model, UUID_STR
 from pynocular.db_util import add_trigger, create_new_database, create_table
 from pynocular.engines import DatabaseType, DBEngine, DBInfo
 
@@ -49,8 +49,8 @@ class Org(BaseModel):
     id: UUID_STR = Field(primary_key=True)
     name: str = Field(max_length=45)
     slug: str = Field(max_length=45)
-    tech_owner: Optional[foreign_key(User, reference_field="tech_owner_id")]
-    business_owner: Optional[foreign_key(User, reference_field="business_owner_id")]
+    tech_owner: Optional[nested_model(User, reference_field="tech_owner_id")]
+    business_owner: Optional[nested_model(User, reference_field="business_owner_id")]
 
     created_at: Optional[datetime] = Field(fetch_on_create=True)
     updated_at: Optional[datetime] = Field(fetch_on_update=True)
@@ -62,7 +62,7 @@ class App(BaseModel):
 
     id: Optional[UUID_STR] = Field(primary_key=True, fetch_on_create=True)
     name: str = Field(max_length=45)
-    org: foreign_key(Org, reference_field="organization_id")
+    org: nested_model(Org, reference_field="organization_id")
     slug: str = Field(max_length=45)
 
     created_at: Optional[datetime] = Field(fetch_on_create=True)
@@ -74,7 +74,7 @@ class Topic(BaseModel):
     """Model that represents the `topics` table"""
 
     id: UUID_STR = Field(primary_key=True)
-    app: foreign_key(App, reference_field="app_id")
+    app: nested_model(App, reference_field="app_id")
     name: str = Field(max_length=45)
 
 

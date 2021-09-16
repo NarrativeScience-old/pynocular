@@ -1,11 +1,11 @@
-"""Class that wraps Foreign Key models"""
+"""Class that wraps nested DatabaseModels"""
 from typing import Any, Callable
 
-from pynocular.exceptions import ForeignReferenceNotResolved
+from pynocular.exceptions import NestedDatabaseModelNotResolved
 
 
-class ForeignReferenceModel:
-    """Class that holds a foreign key reference to another model"""
+class NestedDatabaseModel:
+    """Class that wraps nested DatabaseModels"""
 
     def __init__(
         self,
@@ -13,7 +13,7 @@ class ForeignReferenceModel:
         _id: Any,
         model: "DatabaseModel" = None,  # noqa
     ) -> None:
-        """Init for ForeignReferenceModel
+        """Init for NestedDatabaseModel
 
         Args:
             model_cls: The class that the id relates to
@@ -23,7 +23,8 @@ class ForeignReferenceModel:
         """
         self._model_cls = model_cls
         self._model = model
-        # Foreign Key references must only have one primary key
+        # We can only support nested database models that are based off of a single
+        # unique identifier
         self._primary_key_name = model_cls._primary_keys[0].name
         setattr(self, self._primary_key_name, _id)
 
@@ -56,7 +57,7 @@ class ForeignReferenceModel:
 
         """
         if self._model is None:
-            raise ForeignReferenceNotResolved(self._model_cls, self.get_primary_id())
+            raise NestedDatabaseModelNotResolved(self._model_cls, self.get_primary_id())
         else:
             return getattr(self._model, attr_name)
 
