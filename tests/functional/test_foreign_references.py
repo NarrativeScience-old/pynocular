@@ -210,7 +210,6 @@ async def test_nested_foreign_references() -> None:
             id=str(uuid4()), name="topic name", app=app, filter_hash="sdfasdf"
         )
 
-        await topic.app.fetch()
         assert topic.app.id == app.id
         assert topic.app == app
         assert topic.app.org.id == org.id

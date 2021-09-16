@@ -303,3 +303,24 @@ async def test_setting_db_managed_columns() -> None:
         assert orig_updated != org.updated_at
     finally:
         await org.delete()
+
+
+@pytest.mark.asyncio
+async def test_fetch() -> None:
+    """Test that we can fetch the latest state of a database record"""
+    org_id = str(uuid4())
+    serial_id = 100
+    try:
+        org = await Org.create(
+            id=org_id, serial_id=serial_id, name="fake org100", slug="fake slug100"
+        )
+        # Change the value locally
+        org.serial_id = 200
+        assert org.serial_id == 200
+
+        # Fetch to change it back
+        await org.fetch()
+        assert org.serial_id == 100
+    finally:
+        # Make sure we delete org so we don't leak out of test
+        await org.delete()

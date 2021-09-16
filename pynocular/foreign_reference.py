@@ -44,6 +44,8 @@ class ForeignReferenceModel:
     def __getattr__(self, attr_name: str) -> Any:
         """Wrapper around getattr
 
+        This will only get hit if the class doesn't have a reference to attr_name
+
         Args:
             attr_name: The name of the attribute
 
@@ -51,9 +53,7 @@ class ForeignReferenceModel:
             The value of the attribute on the object
 
         """
-        if attr_name == "resolve_ref" or attr_name == self._primary_key_name:
-            return getattr(self, attr_name)
-        elif self._model is None:
+        if self._model is None:
             raise AttributeError
         else:
             return getattr(self._model, attr_name)

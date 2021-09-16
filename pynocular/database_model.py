@@ -609,17 +609,23 @@ class DatabaseModel:
 
         return getattr(self, self._primary_keys[0].name)
 
-    async def fetch(self) -> None:
-        """Gets the latest of the object from the database and updates itself"""
+    async def fetch(self, resolve_references: bool = False) -> None:
+        """Gets the latest of the object from the database and updates itself
 
+        Args:
+            resolve_references: If True, resolve any foreign key references
+
+        """
         # Get the latest version of self
-        new_self = await self.get(**{
+        get_params = {
             primary_key.name: getattr(self, primary_key.name)
             for primary_key in self._primary_keys
-        })
+        }
+        get_params["resolve_references"] = resolve_references
+        new_self = await self.get(**get_params)
 
-        import pdb;pdb.set_trace()
-        self = new_self
+        for attr_name, new_attr_val in new_self.dict().items():
+            setattr(self, attr_name, new_attr_val)
 
     async def delete(self) -> None:
         """Delete this record from the database"""
