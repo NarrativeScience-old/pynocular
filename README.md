@@ -227,7 +227,7 @@ assert org_dict == expected_org_dict
 
 ```
 
-When using `DatabaseModel.get(..)`, any foreign references will need to be resolved before any properties can be accessed that is not the primary id. If you try to access a property before calling `fetch()` on the nested model a `NestedDatabaseModelNotResolved` error will be thrown
+When using `DatabaseModel.get(..)`, any foreign references will need to be resolved before any properties besides the primary ID can be accessed. If you try to access a property before calling `fetch()` on the nested model, a `NestedDatabaseModelNotResolved` error will be thrown.
 
 ```python
 org_get = await Org.get(org3.id)
