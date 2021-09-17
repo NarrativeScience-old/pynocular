@@ -146,7 +146,7 @@ assert org == new_org
 
 Pynocular also supports basic object relationships. If your database tables have a
 foreign key reference you can leverage that in your pydantic models to increase the
-accessibility of those related objects
+accessibility of those related objects.
 
 ```python
 from pydantic import BaseModel, Field
@@ -192,7 +192,7 @@ org = await Org.create(
 
 assert org.business_owner == business_owner
 
-# add tech owner
+# Add tech owner
 org.tech_owner = tech_owner
 await org.save()
 
@@ -201,7 +201,7 @@ org2 = Org.get(org.id)
 assert org2.tech_owner.id == tech_owner.id
 assert org2.business_owner.id == business_owner.id
 
-# swap user roles
+# Swap user roles
 org2.tech_owner = business_owner
 org2.business_owner = tech_owner
 await org2.save()
@@ -227,7 +227,7 @@ assert org_dict == expected_org_dict
 
 ```
 
-When using `DatabaseModel.get(..)`, any foreign references will need to be resolved before any properties can be accessed that is not the primary id. If you try to access a property before calling `fetch()` on the nested model a `NestedDatabaseModelNotResolved` error will be thrown
+When using `DatabaseModel.get(..)`, any foreign references will need to be resolved before any properties besides the primary ID can be accessed. If you try to access a property before calling `fetch()` on the nested model, a `NestedDatabaseModelNotResolved` error will be thrown.
 
 ```python
 org_get = await Org.get(org3.id)
@@ -239,17 +239,17 @@ await org_get.tech_owner.fetch()
 org_get.tech_owner.username # Does not raise `NestedDatabaseModelNotResolved`
 ```
 
-Alternatively, calling `DatabaseModel.get_with_refs` instead of `DatabaseModel.get` will
-automatically fetch the referenced records and fully resolve those objects for you
+Alternatively, calling `DatabaseModel.get_with_refs()` instead of `DatabaseModel.get()` will
+automatically fetch the referenced records and fully resolve those objects for you.
 
 ```python
 org_get_with_refs = await Org.get_with_refs(org3.id)
 org_get_with_refs.tech_owner.username # Does not raise `NestedDatabaseModelNotResolved`
 ```
 
-There are some situations where the none of the objects have been persisted to the
-database yet, in this situation you can call `Database.save(include_nested_models=True)`
-on the object with the references and it will persist all of them in a transaction
+There are some situations where none of the objects have been persisted to the
+database yet. In this situation, you can call `Database.save(include_nested_models=True)`
+on the object with the references and it will persist all of them in a transaction.
 
 ```python
 # We create the objects but dont persist them
@@ -383,7 +383,7 @@ If `is_conditional` is `True` and there is no transaction in the call chain, the
 
 ### Creating database and tables
 
-With Pynocular you can use simple python code to create new databases and database tables. All you need is a working connection string to the database host, a DatabaseInfo that contains the information of the database you want to create and a properly decorated pydantic model. When you decorate a Pydantic model with Pynocular, it creates a SQLAlchemy table as a private variable. This can be accessed via the `_table` property
+With Pynocular you can use simple python code to create new databases and database tables. All you need is a working connection string to the database host, a `DatabaseInfo` object that contains the information of the database you want to create, and a properly decorated pydantic model. When you decorate a pydantic model with Pynocular, it creates a SQLAlchemy table as a private variable. This can be accessed via the `_table` property
 (although accessing private variables is not recommended).
 
 ```python
