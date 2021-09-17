@@ -249,7 +249,7 @@ org_get_with_refs.tech_owner.username # Does not raise `NestedDatabaseModelNotRe
 
 There are some situations where none of the objects have been persisted to the
 database yet. In this situation, you can call `Database.save(include_nested_models=True)`
-on the object with the references and it will persist all of them in a transaction
+on the object with the references and it will persist all of them in a transaction.
 
 ```python
 # We create the objects but dont persist them
