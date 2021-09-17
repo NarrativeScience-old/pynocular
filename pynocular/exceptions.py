@@ -324,4 +324,4 @@ class NestedDatabaseModelNotResolved(BaseException):
             f"Please call `fetch()` before trying to access properties of {model_cls}"
         )
 
-        super.__init__(msg, msg)
+        super().__init__(msg, msg)

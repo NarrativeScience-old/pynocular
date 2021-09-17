@@ -200,3 +200,41 @@ async def test_nested_foreign_references() -> None:
         await org.delete()
         await app.delete()
         await topic.delete()
+
+
+@pytest.mark.asyncio
+async def test_nested_save() -> None:
+    """Test that all the objects will persist if the proper flag is provided"""
+
+    try:
+        tech_owner = User(id=str(uuid4()), username="owner1")
+        business_owner = User(id=str(uuid4()), username="owner2")
+        org = Org(
+            id=str(uuid4()),
+            name="fake org104",
+            slug="fake slug104",
+            business_owner=business_owner,
+        )
+
+        await org.save(include_nested_models=True)
+
+        # Get the org and user that should have persisted
+        org_get = await Org.get(org.id)
+        user_get = await User.get(business_owner.id)
+
+        assert org_get.business_owner.id == user_get.id
+
+        # Now add the tech owner and save again. This time, org_get.business_owner is
+        # not resolved but it should still successfully persist everything
+        org_get.tech_owner = tech_owner
+        await org_get.save(include_nested_models=True)
+
+        org_get = await Org.get(org_get.id)
+        user_get = await User.get(tech_owner.id)
+
+        assert org_get.tech_owner.id == user_get.id
+        assert org_get.business_owner.id == business_owner.id
+    finally:
+        await org.delete()
+        await tech_owner.delete()
+        await business_owner.delete()

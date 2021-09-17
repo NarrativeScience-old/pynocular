@@ -92,7 +92,7 @@ async def add_datetime_trigger(conn: SAConnection, table: str) -> None:
     )
 
 
-async def remove_trigger(conn: SAConnection, table: str) -> None:
+async def remove_datetime_trigger(conn: SAConnection, table: str) -> None:
     """Helper method for removing datetime triggers on a table
 
     Args:

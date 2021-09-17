@@ -34,6 +34,7 @@ from pynocular.exceptions import (
     InvalidFieldValue,
     InvalidMethodParameterization,
     InvalidTextRepresentation,
+    NestedDatabaseModelNotResolved,
 )
 from pynocular.nested_database_model import NestedDatabaseModel
 
@@ -575,8 +576,15 @@ class DatabaseModel:
 
             return [cls.from_dict(dict(record)) for record in await results.fetchall()]
 
-    async def save(self) -> None:
-        """Update the database record this object represents with its current state"""
+    async def save(self, include_nested_models=False) -> None:
+        """Update the database record this object represents with its current state
+
+        Args:
+            include_nested_models: If True, any nested models should get saved before
+                this object gets saved
+
+        """
+
         dict_self = self.to_dict()
 
         primary_key_names = [primary_key.name for primary_key in self._primary_keys]
@@ -591,6 +599,20 @@ class DatabaseModel:
         async with (
             await DBEngine.transaction(self._database_info, is_conditional=False)
         ) as conn:
+            # If flag is set, first try to persist any nested models. This needs to
+            # happen inside of the transaction so if something fails everything gets
+            # rolled back
+            if include_nested_models:
+                for attr_name in self._nested_model_attributes:
+                    try:
+                        obj = getattr(self, attr_name)
+                        if obj is not None:
+                            await obj.save()
+                    except NestedDatabaseModelNotResolved:
+                        # If the object was never resolved than it already exists in the
+                        # DB and the DB has the latest state
+                        continue
+
             record = await conn.execute(
                 insert(self._table)
                 .values(dict_self)
