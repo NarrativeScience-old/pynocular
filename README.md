@@ -192,7 +192,7 @@ org = await Org.create(
 
 assert org.business_owner == business_owner
 
-# add tech owner
+# Add tech owner
 org.tech_owner = tech_owner
 await org.save()
 
