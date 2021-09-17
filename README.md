@@ -239,7 +239,7 @@ await org_get.tech_owner.fetch()
 org_get.tech_owner.username # Does not raise `NestedDatabaseModelNotResolved`
 ```
 
-Alternatively, calling `DatabaseModel.get_with_refs` instead of `DatabaseModel.get` will
+Alternatively, calling `DatabaseModel.get_with_refs()` instead of `DatabaseModel.get()` will
 automatically fetch the referenced records and fully resolve those objects for you
 
 ```python
