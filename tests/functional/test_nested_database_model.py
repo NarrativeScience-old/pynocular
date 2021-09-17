@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 import pytest
 
 from pynocular.database_model import database_model, nested_model, UUID_STR
-from pynocular.db_util import add_trigger, create_new_database, create_table
+from pynocular.db_util import add_datetime_trigger, create_new_database, create_table
 from pynocular.engines import DatabaseType, DBEngine, DBInfo
 
 db_user_password = str(os.environ.get("DB_USER_PASSWORD"))
@@ -38,9 +38,6 @@ class User(BaseModel):
     id: UUID_STR = Field(primary_key=True)
     username: str = Field(max_length=100)
 
-    created_at: Optional[datetime] = Field(fetch_on_create=True)
-    updated_at: Optional[datetime] = Field(fetch_on_update=True)
-
 
 @database_model("organizations", testdb)
 class Org(BaseModel):
@@ -65,9 +62,6 @@ class App(BaseModel):
     org: nested_model(Org, reference_field="organization_id")
     slug: str = Field(max_length=45)
 
-    created_at: Optional[datetime] = Field(fetch_on_create=True)
-    updated_at: Optional[datetime] = Field(fetch_on_update=True)
-
 
 @database_model("topics", testdb)
 class Topic(BaseModel):
@@ -87,7 +81,7 @@ async def setup_db_and_tables():
     await create_table(testdb, Topic._table)
     await create_table(testdb, App._table)
     conn = await (await DBEngine.get_engine(testdb)).acquire()
-    await add_trigger(conn, "organizations")
+    await add_datetime_trigger(conn, "organizations")
 
 
 loop = asyncio.get_event_loop()

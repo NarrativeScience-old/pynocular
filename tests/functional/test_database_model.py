@@ -11,7 +11,7 @@ from pydantic.error_wrappers import ValidationError
 import pytest
 
 from pynocular.database_model import database_model, UUID_STR
-from pynocular.db_util import add_trigger, create_new_database, create_table
+from pynocular.db_util import add_datetime_trigger, create_new_database, create_table
 from pynocular.engines import DatabaseType, DBEngine, DBInfo
 from pynocular.exceptions import DatabaseModelMissingField, DatabaseRecordNotFound
 
@@ -65,7 +65,7 @@ async def setup_db_and_tables():
     await create_table(testdb, Org._table)
     await create_table(testdb, Topic._table)
     conn = await (await DBEngine.get_engine(testdb)).acquire()
-    await add_trigger(conn, "organizations")
+    await add_datetime_trigger(conn, "organizations")
 
 
 loop = asyncio.get_event_loop()

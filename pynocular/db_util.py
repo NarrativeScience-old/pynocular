@@ -45,8 +45,8 @@ async def create_table(db_info: DBInfo, table: sa.Table):
     await conn.close()
 
 
-async def setup_trigger(conn: SAConnection):
-    """Set up created/updated trigger
+async def setup_datetime_trigger(conn: SAConnection):
+    """Set up created_at/updated_at datetime trigger
 
     Args:
         conn: an async sqlalchemy connection
@@ -71,15 +71,16 @@ async def setup_trigger(conn: SAConnection):
     )
 
 
-async def add_trigger(conn: SAConnection, table: str) -> None:
-    """Helper method for adding datetime triggers on a table
+async def add_datetime_trigger(conn: SAConnection, table: str) -> None:
+    """Helper method for adding created_at and updated_at datetime triggers on a table
+
 
     Args:
         conn: an async sqlalchemy connection
         table: The name of the table to add an edit trigger for
 
     """
-    await setup_trigger(conn)
+    await setup_datetime_trigger(conn)
     await conn.execute(
         """
         CREATE TRIGGER update_{table}_timestamps
