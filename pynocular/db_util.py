@@ -45,6 +45,20 @@ async def create_table(db_info: DBInfo, table: sa.Table):
     await conn.close()
 
 
+async def drop_table(db_info: DBInfo, table: sa.Table):
+    """Drop table in database
+
+    Args:
+        db_info: Information for the database to connect to
+        table: The table to create
+
+    """
+    engine = await DBEngine.get_engine(db_info)
+    conn = await engine.acquire()
+    await conn.execute(f"drop table if exists {table.name}")
+    await conn.close()
+
+
 async def setup_datetime_trigger(conn: SAConnection):
     """Set up created_at/updated_at datetime trigger
 
