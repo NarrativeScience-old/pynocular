@@ -321,7 +321,7 @@ class NestedDatabaseModelNotResolved(BaseException):
         """
         msg = (
             f"Object {model_cls} with id {nested_model_id_value} was not resolved."
-            f"Please call `fetch()` before trying to access properties of {model_cls}"
+            f" Please call `fetch()` before trying to access properties of {model_cls}"
         )
 
         super().__init__(msg, msg)
