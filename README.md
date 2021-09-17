@@ -247,7 +247,7 @@ org_get_with_refs = await Org.get_with_refs(org3.id)
 org_get_with_refs.tech_owner.username # Does not raise `NestedDatabaseModelNotResolved`
 ```
 
-There are some situations where the none of the objects have been persisted to the
+There are some situations where none of the objects have been persisted to the
 database yet, in this situation you can call `Database.save(include_nested_models=True)`
 on the object with the references and it will persist all of them in a transaction
 
