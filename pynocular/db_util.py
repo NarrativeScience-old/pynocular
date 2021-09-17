@@ -13,7 +13,7 @@ from pynocular.exceptions import InvalidSqlIdentifierErr
 logger = logging.getLogger()
 
 
-async def create_new_database(connection_string: str, db_name: str):
+async def create_new_database(connection_string: str, db_name: str) -> None:
     """Create a new database database for testing
 
     Args:
@@ -31,7 +31,7 @@ async def create_new_database(connection_string: str, db_name: str):
     await conn.close()
 
 
-async def create_table(db_info: DBInfo, table: sa.Table):
+async def create_table(db_info: DBInfo, table: sa.Table) -> None:
     """Create table in database
 
     Args:
@@ -45,7 +45,7 @@ async def create_table(db_info: DBInfo, table: sa.Table):
     await conn.close()
 
 
-async def drop_table(db_info: DBInfo, table: sa.Table):
+async def drop_table(db_info: DBInfo, table: sa.Table) -> None:
     """Drop table in database
 
     Args:
@@ -59,7 +59,7 @@ async def drop_table(db_info: DBInfo, table: sa.Table):
     await conn.close()
 
 
-async def setup_datetime_trigger(conn: SAConnection):
+async def setup_datetime_trigger(conn: SAConnection) -> None:
     """Set up created_at/updated_at datetime trigger
 
     Args:

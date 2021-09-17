@@ -81,7 +81,15 @@ class UUID_STR(str):
 def nested_model(
     db_model_class: "DatabaseModel", reference_field: str = None
 ) -> Callable:
-    """Generate a NestedModel class with dynamic model references"""
+    """Generate a NestedModel class with dynamic model references
+
+    Args:
+        db_model_class: The specific model class that will be nested. This will be a
+            subclass of `DatabaseModel`
+        reference_field: The name of the field on the database table that this nested
+            model references.
+
+    """
 
     class NestedModel:
         """NestedModel type for NestedDatabaseModels"""

@@ -131,8 +131,8 @@ expected_org_dict = {
     "id": "e64f6c7a-1bd1-4169-b482-189bd3598079",
     "name": "org serialize",
     "slug": "org-serialize",
-    "created_at": 2018-01-01 7:03:45
-    "updated_at": 2018-01-01 9:24:12
+    "created_at": "2018-01-01 7:03:45",
+    "updated_at": "2018-01-01 9:24:12"
 }
 assert org_dict == expected_org_dict
 
