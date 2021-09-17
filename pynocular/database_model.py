@@ -1,8 +1,9 @@
 """Base Model class that implements CRUD methods for database entities based on Pydantic dataclasses"""
+import asyncio
 from datetime import datetime
 from enum import Enum, EnumMeta
 import inspect
-from typing import Any, Dict, Generator, List, Optional, Sequence
+from typing import Any, Callable, Dict, Generator, List, Optional, Sequence, Set, Union
 from uuid import UUID as stdlib_uuid
 
 from aenum import Enum as AEnum, EnumMeta as AEnumMeta
@@ -33,7 +34,9 @@ from pynocular.exceptions import (
     InvalidFieldValue,
     InvalidMethodParameterization,
     InvalidTextRepresentation,
+    NestedDatabaseModelNotResolved,
 )
+from pynocular.nested_database_model import NestedDatabaseModel
 
 
 def is_valid_uuid(string: str) -> bool:
@@ -73,6 +76,42 @@ class UUID_STR(str):
             return str(v)
         else:
             raise ValueError("invalid UUID string")
+
+
+def nested_model(
+    db_model_class: "DatabaseModel", reference_field: str = None
+) -> Callable:
+    """Generate a NestedModel class with dynamic model references
+
+    Args:
+        db_model_class: The specific model class that will be nested. This will be a
+            subclass of `DatabaseModel`
+        reference_field: The name of the field on the database table that this nested
+            model references.
+
+    """
+
+    class NestedModel:
+        """NestedModel type for NestedDatabaseModels"""
+
+        reference_field_name = reference_field
+
+        @classmethod
+        def __get_validators__(cls) -> Generator:
+            """Get the validators for the given class"""
+            yield cls.validate
+
+        @classmethod
+        def validate(cls, v: Union[UUID_STR, "DatabaseModel"]) -> NestedDatabaseModel:
+            """Validate value and generate a nested database model"""
+            # If value is a uuid then create a NestedDatabaseModel, otherwise just
+            # Set the DatabaseModel as the value
+            if is_valid_uuid(v):
+                return NestedDatabaseModel(db_model_class, v)
+            else:
+                return NestedDatabaseModel(db_model_class, v.get_primary_id(), v)
+
+    return NestedModel
 
 
 def database_model(table_name: str, database_info: DBInfo) -> "DatabaseModel":
@@ -127,6 +166,18 @@ class DatabaseModel:
     # These are the server_default and server_onupdate functions in SQLAlchemy
     _db_managed_fields: List[str] = None
 
+    # The following tables track which attributes on the model are nested model
+    # references
+    # Some nested model attributes may have different names than their actual db table;
+    # For example; on an App we may have an `org` attribute but the db field is
+    # `organzation_id`
+
+    # In order to manage this we also need maps from attribute name to table_field_name
+    # and back
+    _nested_model_attributes: Set[str] = None
+    _nested_attr_table_field_map: Dict[str, str] = None
+    _nested_table_field_attr_map: Dict[str, str] = None
+
     # This can be used to access the table when defining where expressions
     columns: ImmutableColumnCollection = None
 
@@ -149,6 +200,9 @@ class DatabaseModel:
         cls._primary_keys = []
         cls._database_info = database_info
         cls._db_managed_fields = []
+        cls._nested_attr_table_field_map = {}
+        cls._nested_table_field_attr_map = {}
+        cls._nested_model_attributes = set()
 
         columns = []
         for field in cls.__fields__.values():
@@ -158,7 +212,6 @@ class DatabaseModel:
             fetch_on_create = field.field_info.extra.get("fetch_on_create", False)
             fetch_on_update = field.field_info.extra.get("fetch_on_update", False)
 
-            type = None
             if field.type_ is str:
                 type = VARCHAR
             elif field.type_.__name__ == "ConstrainedStrValue":
@@ -186,6 +239,21 @@ class DatabaseModel:
                 type = sqlalchemy_uuid()
             elif field.type_ is datetime:
                 type = TIMESTAMP(timezone=True)
+            elif field.type_.__name__ == "NestedModel":
+                cls._nested_model_attributes.add(name)
+                # If the field name on the NestedModel type is not None, use that for the
+                # column name
+                if field.type_.reference_field_name is not None:
+                    cls._nested_attr_table_field_map[
+                        name
+                    ] = field.type_.reference_field_name
+                    cls._nested_table_field_attr_map[
+                        field.type_.reference_field_name
+                    ] = name
+                    name = field.type_.reference_field_name
+
+                # Assume all IDs are UUIDs for now
+                type = sqlalchemy_uuid()
             # TODO - how are people using this today? Is there a class we need to make or can we reuse one
             # elif field.type_ is bit:
             #     type = Bit
@@ -213,8 +281,29 @@ class DatabaseModel:
         cls.columns = cls._table.c
 
     @classmethod
+    async def get_with_refs(cls, *args: Any, **kwargs: Any) -> "DatabaseModel":
+        """Gets the DatabaseModel associated with any nested key references resolved
+
+        Args:
+            args: The column id for the object's primary key
+            kwargs: The columns and ids that make up the object's composite primary key
+
+        Returns:
+            A DatabaseModel object representing the record in the db if one exists
+
+        """
+        obj = await cls.get(*args, **kwargs)
+        gatherables = [
+            (getattr(obj, prop_name)).fetch()
+            for prop_name in cls._nested_model_attributes
+        ]
+        await asyncio.gather(*gatherables)
+
+        return obj
+
+    @classmethod
     async def get(cls, *args: Any, **kwargs: Any) -> "DatabaseModel":
-        """Fetches the DatabaseModel for the given primary key value(s)
+        """Gets the DatabaseModel for the given primary key value(s)
 
         Args:
             args: The column id for the object's primary key
@@ -272,7 +361,9 @@ class DatabaseModel:
 
         """
         where_clause_list = []
-        for db_field_name, db_field_value in kwargs.items():
+        for field_name, db_field_value in kwargs.items():
+            db_field_name = cls._nested_attr_table_field_map.get(field_name, field_name)
+
             try:
                 db_field = getattr(cls._table.c, db_field_name)
             except AttributeError:
@@ -327,7 +418,7 @@ class DatabaseModel:
                 raise InvalidFieldValue(message=e.diag.message_primary)
             records = await result.fetchall()
 
-            return [cls(**dict(record)) for record in records]
+            return [cls.from_dict(dict(record)) for record in records]
 
     @classmethod
     async def create(cls, **data) -> "DatabaseModel":
@@ -363,7 +454,7 @@ class DatabaseModel:
 
         values = []
         for model in models:
-            dict_obj = model.dict()
+            dict_obj = model.to_dict()
             for field in cls._db_managed_fields:
                 # Remove any fields that the database calculates
                 del dict_obj[field]
@@ -401,7 +492,9 @@ class DatabaseModel:
 
         """
         where_clause_list = []
-        for db_field_name, db_field_value in kwargs.items():
+        for field_name, db_field_value in kwargs.items():
+            db_field_name = cls._nested_attr_table_field_map.get(field_name, field_name)
+
             try:
                 db_field = getattr(cls._table.c, db_field_name)
             except AttributeError:
@@ -445,7 +538,12 @@ class DatabaseModel:
             where_expressions.append(primary_key == primary_key_value)
             primary_key_dict[primary_key.name] = primary_key_value
 
-        updated_records = await cls.update(where_expressions, kwargs)
+        modified_kwargs = {}
+        for field_name, value in kwargs.items():
+            db_field_name = cls._nested_attr_table_field_map.get(field_name, field_name)
+            modified_kwargs[db_field_name] = value
+
+        updated_records = await cls.update(where_expressions, modified_kwargs)
         if len(updated_records) == 0:
             raise DatabaseRecordNotFound(cls._table.name, **primary_key_dict)
         return updated_records[0]
@@ -484,11 +582,18 @@ class DatabaseModel:
             except InvalidTextRepresentation as e:
                 raise InvalidFieldValue(message=e.diag.message_primary)
 
-            return [cls(**dict(record)) for record in await results.fetchall()]
+            return [cls.from_dict(dict(record)) for record in await results.fetchall()]
 
-    async def save(self) -> None:
-        """Update the database record this object represents with its current state"""
-        dict_self = self.dict()
+    async def save(self, include_nested_models=False) -> None:
+        """Update the database record this object represents with its current state
+
+        Args:
+            include_nested_models: If True, any nested models should get saved before
+                this object gets saved
+
+        """
+
+        dict_self = self.to_dict()
 
         primary_key_names = [primary_key.name for primary_key in self._primary_keys]
 
@@ -502,6 +607,20 @@ class DatabaseModel:
         async with (
             await DBEngine.transaction(self._database_info, is_conditional=False)
         ) as conn:
+            # If flag is set, first try to persist any nested models. This needs to
+            # happen inside of the transaction so if something fails everything gets
+            # rolled back
+            if include_nested_models:
+                for attr_name in self._nested_model_attributes:
+                    try:
+                        obj = getattr(self, attr_name)
+                        if obj is not None:
+                            await obj.save()
+                    except NestedDatabaseModelNotResolved:
+                        # If the object was never resolved than it already exists in the
+                        # DB and the DB has the latest state
+                        continue
+
             record = await conn.execute(
                 insert(self._table)
                 .values(dict_self)
@@ -513,6 +632,40 @@ class DatabaseModel:
 
             for field in self._db_managed_fields:
                 setattr(self, field, row[field])
+
+    def get_primary_id(self) -> Any:
+        """Standard interface for returning the id of a field
+
+        This assumes that there is a single primary id, otherwise this returns `None`
+
+        Returns:
+            The ID value for this DatabaseModel instance
+
+        """
+        if len(self._primary_keys) > 1:
+            return None
+
+        return getattr(self, self._primary_keys[0].name)
+
+    async def fetch(self, resolve_references: bool = False) -> None:
+        """Gets the latest of the object from the database and updates itself
+
+        Args:
+            resolve_references: If True, resolve any nested key references
+
+        """
+        # Get the latest version of self
+        get_params = {
+            primary_key.name: getattr(self, primary_key.name)
+            for primary_key in self._primary_keys
+        }
+        if resolve_references:
+            new_self = await self.get_with_refs(**get_params)
+        else:
+            new_self = await self.get(**get_params)
+
+        for attr_name, new_attr_val in new_self.dict().items():
+            setattr(self, attr_name, new_attr_val)
 
     async def delete(self) -> None:
         """Delete this record from the database"""
@@ -546,7 +699,11 @@ class DatabaseModel:
             The DatabaseModel object
 
         """
-        return cls(**_dict)
+        modified_dict = {}
+        for key, value in _dict.items():
+            modified_key = cls._nested_table_field_attr_map.get(key, key)
+            modified_dict[modified_key] = value
+        return cls(**modified_dict)
 
     def to_dict(
         self, serialize: bool = False, include_keys: Optional[Sequence] = None
@@ -577,6 +734,15 @@ class DatabaseModel:
                     prop_value = prop_value.name
                 elif isinstance(prop_value, AEnum):
                     prop_value = prop_value.value
+
+            if prop_name in self._nested_model_attributes:
+                # self.dict() will serialize any BaseModels into a dict so fetch the
+                # actual object from self
+                temp_prop_value = getattr(self, prop_name)
+                prop_name = self._nested_attr_table_field_map.get(prop_name, prop_name)
+                # temp_prop_value can be `None` if the nested key is optional
+                if temp_prop_value is not None:
+                    prop_value = temp_prop_value.get_primary_id()
 
             if not include_keys or prop_name in include_keys:
                 _dict[prop_name] = prop_value

@@ -57,18 +57,20 @@ db_info = DBInfo(DatabaseType.aiopg_engine, connection_string)
 Pynocular supports connecting to your database through two different asyncio engines; aiopg and asyncpgsa.
 You can pick which one you want to use by passing the correct `DatabaseType` enum value into `DBInfo`.
 
+#### Object Management
+
 Once you define a `db_info` object, you are ready to decorate your Pydantic models and interact with your database!
 
 ```python
 from pydantic import BaseModel, Field
 from pynocular.database_model import database_model, UUID_STR
 
+from my_package import db_info
 
 @database_model("organizations", db_info)
 class Org(BaseModel):
 
     id: Optional[UUID_STR] = Field(primary_key=True, fetch_on_create=True)
-    serial_id: Optional[int]
     name: str = Field(max_length=45)
     slug: str = Field(max_length=45)
     tag: Optional[str] = Field(max_length=100)
@@ -76,13 +78,14 @@ class Org(BaseModel):
     created_at: Optional[datetime] = Field(fetch_on_create=True)
     updated_at: Optional[datetime] = Field(fetch_on_update=True)
 
+#### Object management
 
 # Create a new Org via `create`
-org = await Org.create("new org", "new-org")
+org = await Org.create(name="new org", slug="new-org")
 
 
 # Create a new Org via `save`
-org2 = Org("new org2", "new-org2")
+org2 = Org(name="new org2", slug="new-org2")
 await org2.save()
 
 
@@ -95,19 +98,174 @@ await org.save()
 await org.delete()
 
 
-# Fetch org
+# Get org
 org3 = await Org.get(org2.id)
 assert org3 == org2
 
-# Fetch a list of orgs
+# Get a list of orgs
 orgs = await Org.get_list()
 
-# Fetch a filtered list of orgs
+# Get a filtered list of orgs
 orgs = await Org.get_list(tag="green")
 
-#  Fetch orgs that have several different tags
+# Get orgs that have several different tags
 orgs = await Org.get_list(tag=["green", "blue", "red"])
+
+# Fetch the latest state of a table in the db
+org3.name = "fake name"
+await org3.fetch()
+assert org3.name == "new org2"
+
 ```
+
+#### Serialization
+
+DatabaseModels have their own serialization functions to convert to and from
+dictionaries.
+
+```python
+# Serializing org with `to_dict()`
+org = Org.create(name="org serialize", slug="org-serialize")
+org_dict = org.to_dict()
+expected_org_dict = {
+    "id": "e64f6c7a-1bd1-4169-b482-189bd3598079",
+    "name": "org serialize",
+    "slug": "org-serialize",
+    "created_at": "2018-01-01 7:03:45",
+    "updated_at": "2018-01-01 9:24:12"
+}
+assert org_dict == expected_org_dict
+
+
+# De-serializing org with `from_dict()`
+new_org = Org.from_dict(expected_org_dict)
+assert org == new_org
+```
+
+#### Using Nested DatabaseModels
+
+Pynocular also supports basic object relationships. If your database tables have a
+foreign key reference you can leverage that in your pydantic models to increase the
+accessibility of those related objects.
+
+```python
+from pydantic import BaseModel, Field
+from pynocular.database_model import database_model, nested_model, UUID_STR
+
+from my_package import db_info
+
+@database_model("users", db_info)
+class User(BaseModel):
+
+    id: Optional[UUID_STR] = Field(primary_key=True, fetch_on_create=True)
+    username: str = Field(max_length=100)
+
+    created_at: Optional[datetime] = Field(fetch_on_create=True)
+    updated_at: Optional[datetime] = Field(fetch_on_update=True)
+
+@database_model("organizations", db_info)
+class Org(BaseModel):
+
+    id: Optional[UUID_STR] = Field(primary_key=True, fetch_on_create=True)
+    name: str = Field(max_length=45)
+    slug: str = Field(max_length=45)
+    # `organizations`.`tech_owner_id` is a foreign key to `users`.`id`
+    tech_owner: Optional[nested_model(User, reference_field="tech_owner_id")]
+    # `organizations`.`business_owner_id` is a foreign key to `users`.`id`
+    business_owner: nested_model(User, reference_field="business_owner_id")
+    tag: Optional[str] = Field(max_length=100)
+
+    created_at: Optional[datetime] = Field(fetch_on_create=True)
+    updated_at: Optional[datetime] = Field(fetch_on_update=True)
+
+
+tech_owner = await User.create("tech owner")
+business_owner = await User.create("business owner")
+
+
+# Creating org with only business owner set
+org = await Org.create(
+    name="org name",
+    slug="org-slug",
+    business_owner=business_owner
+)
+
+assert org.business_owner == business_owner
+
+# Add tech owner
+org.tech_owner = tech_owner
+await org.save()
+
+# Fetch from the db and check ids
+org2 = Org.get(org.id)
+assert org2.tech_owner.id == tech_owner.id
+assert org2.business_owner.id == business_owner.id
+
+# Swap user roles
+org2.tech_owner = business_owner
+org2.business_owner = tech_owner
+await org2.save()
+org3 = await Org.get(org2.id)
+assert org3.tech_owner.id == business_owner.id
+assert org3.business_owner.id == tech_owner.id
+
+
+# Serialize org
+org_dict = org3.to_dict()
+expected_org_dict = {
+    "id": org3.id,
+    "name": "org name",
+    "slug": "org-slug",
+    "business_owner_id": tech_owner.id,
+    "tech_owner_id": business_owner.id,
+    "tag": None,
+    "created_at": org3.created_at,
+    "updated_at": org3.updated_at
+}
+
+assert org_dict == expected_org_dict
+
+```
+
+When using `DatabaseModel.get(..)`, any foreign references will need to be resolved before any properties besides the primary ID can be accessed. If you try to access a property before calling `fetch()` on the nested model, a `NestedDatabaseModelNotResolved` error will be thrown.
+
+```python
+org_get = await Org.get(org3.id)
+org_get.tech_owner.id # Does not raise `NestedDatabaseModelNotResolved`
+org_get.tech_owner.username # Raises `NestedDatabaseModelNotResolved`
+
+org_get = await Org.get(org3.id)
+await org_get.tech_owner.fetch()
+org_get.tech_owner.username # Does not raise `NestedDatabaseModelNotResolved`
+```
+
+Alternatively, calling `DatabaseModel.get_with_refs()` instead of `DatabaseModel.get()` will
+automatically fetch the referenced records and fully resolve those objects for you.
+
+```python
+org_get_with_refs = await Org.get_with_refs(org3.id)
+org_get_with_refs.tech_owner.username # Does not raise `NestedDatabaseModelNotResolved`
+```
+
+There are some situations where none of the objects have been persisted to the
+database yet. In this situation, you can call `Database.save(include_nested_models=True)`
+on the object with the references and it will persist all of them in a transaction.
+
+```python
+# We create the objects but dont persist them
+tech_owner = User("tech owner")
+business_owner = User("business owner")
+
+org = Org(
+    name="org name",
+    slug="org-slug",
+    business_owner=business_owner
+)
+
+await org.save(include_nested_models=True)
+```
+
+#### Special Type arguments
 
 With Pynocular you can set fields to be optional and set by the database. This is useful
 if you want to let the database autogenerate your primary key or `created_at` and `updated_at` fields
@@ -122,6 +280,42 @@ For most use cases, the basic usage defined above should suffice. However, there
 where you don't necessarily want to fetch each object or you need to do more complex queries that
 are not exposed by the `DatabaseModel` interface. Below are some examples of how those situations can
 be addressed using Pynocular.
+
+#### Tables with compound keys
+
+Pynocular supports tables that use multiple fields as its primary key such as join tables.
+
+```python
+from pydantic import BaseModel, Field
+from pynocular.database_model import database_model, nested_model, UUID_STR
+
+from my_package import db_info
+
+@database_model("user_subscriptions", db_info)
+class UserSubscriptions(BaseModel):
+
+    user_id: UUID_STR = Field(primary_key=True, fetch_on_create=True)
+    subscription_id: UUID_STR = Field(primary_key=True, fetch_on_create=True)
+    name: str
+
+
+user_sub = await UserSub.create(
+    user_id="4d4254c4-8e99-45f9-8261-82f87991c659",
+    subscription_id="3cc5d476-dbe6-4cc1-9390-49ebd7593a3d",
+    name="User 1's subscriptions"
+)
+
+# Get the users subscription and confirm its the same
+user_sub_get = await UserSub.get(
+    user_id="4d4254c4-8e99-45f9-8261-82f87991c659",
+    subscription_id="3cc5d476-dbe6-4cc1-9390-49ebd7593a3d",
+)
+assert user_sub_get == user_sub
+
+# Change a property value like any other object
+user_sub_get.name = "change name"
+await user_sub_get.save()
+```
 
 #### Batch operations on tables
 
@@ -187,19 +381,21 @@ a new one and any subsequent calls underneath that context manager will be added
 
 If `is_conditional` is `True` and there is no transaction in the call chain, then the connection will not create a new transaction. Instead, the query will be performed without a transaction.
 
-### Creating database tables
+### Creating database and tables
 
-When you decorate a Pydantic model with Pynocular, it creates a SQLAlchemy table as a private variable. This can be accessed via the `_table` property
-(although accessing private variables is not recommended). Using this, along with Pynocular's `create_tracked_table` function, allows you to create tables
-in your database based off of Pydantic models!
+With Pynocular you can use simple python code to create new databases and database tables. All you need is a working connection string to the database host, a `DatabaseInfo` object that contains the information of the database you want to create, and a properly decorated pydantic model. When you decorate a pydantic model with Pynocular, it creates a SQLAlchemy table as a private variable. This can be accessed via the `_table` property
+(although accessing private variables is not recommended).
 
 ```python
-from pynocular.db_utils import create_tracked_table
+from pynocular.db_util import create_new_database, create_table
 
-from my_package import Org
+from my_package import Org, db_info
 
-# Creates the table "organizations" in the database defined by db_info
-await create_tracked_table(Org._database_info, Org._table)
+connection_string = "postgresql://postgres:XXXX@localhost:5432/postgres?sslmode=disable"
+
+# Creates a new database and "organizations" table in that database
+await create_new_database(connection_string, db_info)
+await create_table(db_info, Org._table)
 
 ```
 

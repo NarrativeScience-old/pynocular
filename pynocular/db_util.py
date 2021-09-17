@@ -13,7 +13,7 @@ from pynocular.exceptions import InvalidSqlIdentifierErr
 logger = logging.getLogger()
 
 
-async def create_new_database(connection_string: str, db_name: str):
+async def create_new_database(connection_string: str, db_name: str) -> None:
     """Create a new database database for testing
 
     Args:
@@ -31,7 +31,7 @@ async def create_new_database(connection_string: str, db_name: str):
     await conn.close()
 
 
-async def create_table(db_info: DBInfo, table: sa.Table):
+async def create_table(db_info: DBInfo, table: sa.Table) -> None:
     """Create table in database
 
     Args:
@@ -45,8 +45,22 @@ async def create_table(db_info: DBInfo, table: sa.Table):
     await conn.close()
 
 
-async def setup_trigger(conn: SAConnection):
-    """Set up created/updated trigger
+async def drop_table(db_info: DBInfo, table: sa.Table) -> None:
+    """Drop table in database
+
+    Args:
+        db_info: Information for the database to connect to
+        table: The table to create
+
+    """
+    engine = await DBEngine.get_engine(db_info)
+    conn = await engine.acquire()
+    await conn.execute(f"drop table if exists {table.name}")
+    await conn.close()
+
+
+async def setup_datetime_trigger(conn: SAConnection) -> None:
+    """Set up created_at/updated_at datetime trigger
 
     Args:
         conn: an async sqlalchemy connection
@@ -71,15 +85,16 @@ async def setup_trigger(conn: SAConnection):
     )
 
 
-async def add_trigger(conn: SAConnection, table: str) -> None:
-    """Helper method for adding datetime triggers on a table
+async def add_datetime_trigger(conn: SAConnection, table: str) -> None:
+    """Helper method for adding created_at and updated_at datetime triggers on a table
+
 
     Args:
         conn: an async sqlalchemy connection
         table: The name of the table to add an edit trigger for
 
     """
-    await setup_trigger(conn)
+    await setup_datetime_trigger(conn)
     await conn.execute(
         """
         CREATE TRIGGER update_{table}_timestamps
@@ -91,7 +106,7 @@ async def add_trigger(conn: SAConnection, table: str) -> None:
     )
 
 
-async def remove_trigger(conn: SAConnection, table: str) -> None:
+async def remove_datetime_trigger(conn: SAConnection, table: str) -> None:
     """Helper method for removing datetime triggers on a table
 
     Args:

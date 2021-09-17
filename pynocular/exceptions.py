@@ -80,7 +80,7 @@ class ErrorInfo(dict):
         self._ensure_external_status_message()
 
 
-class AppConfigException(Exception):
+class BaseException(Exception):
     """Base class for exceptions.
 
     Its only responsibility is to capture internal and external status
@@ -156,7 +156,7 @@ class AppConfigException(Exception):
         return self.internal_msg
 
 
-class DatabaseRecordNotFound(AppConfigException):
+class DatabaseRecordNotFound(BaseException):
     """Exception thrown when trying to fetch a database record that doesn't exist"""
 
     def __init__(self, table_name: str, **kwargs: Any) -> None:
@@ -175,7 +175,7 @@ class DatabaseRecordNotFound(AppConfigException):
         super().__init__(msg, msg)
 
 
-class DatabaseObjectMisconfigured(AppConfigException):
+class DatabaseObjectMisconfigured(BaseException):
     """Exception thrown when using a misconfigured DatabaseObject object"""
 
     def __init__(self, class_name: str) -> None:
@@ -189,7 +189,7 @@ class DatabaseObjectMisconfigured(AppConfigException):
         super().__init__(msg, msg)
 
 
-class DatabaseModelMisconfigured(AppConfigException):
+class DatabaseModelMisconfigured(BaseException):
     """Exception thrown when using a misconfigured DatabaseModel object"""
 
     def __init__(self, class_name: str) -> None:
@@ -203,7 +203,7 @@ class DatabaseModelMisconfigured(AppConfigException):
         super().__init__(msg, msg)
 
 
-class DatabaseObjectMissingField(AppConfigException):
+class DatabaseObjectMissingField(BaseException):
     """Exception thrown when the field provided for querying doesn't exist on the table"""
 
     def __init__(self, class_name: str, field_name: str) -> None:
@@ -218,7 +218,7 @@ class DatabaseObjectMissingField(AppConfigException):
         super().__init__(msg, msg)
 
 
-class DatabaseModelMissingField(AppConfigException):
+class DatabaseModelMissingField(BaseException):
     """Exception thrown when the field provided for querying doesn't exist on the table"""
 
     def __init__(self, class_name: str, field_name: str) -> None:
@@ -233,7 +233,7 @@ class DatabaseModelMissingField(AppConfigException):
         super().__init__(msg, msg)
 
 
-class InvalidMethodParameterization(AppConfigException):
+class InvalidMethodParameterization(BaseException):
     """Exception thrown when passing invalid parameters into a method"""
 
     def __init__(self, method_name: str, **kwargs: Any) -> None:
@@ -251,7 +251,7 @@ class InvalidMethodParameterization(AppConfigException):
         super().__init__(msg, msg)
 
 
-class InvalidFieldValue(AppConfigException):
+class InvalidFieldValue(BaseException):
     """Exception thrown when a field value is invalid"""
 
     def __init__(
@@ -306,3 +306,22 @@ class InvalidSqlIdentifierErr(Exception):
     def __str__(self) -> str:
         """Returns the message describing the exception"""
         return f"Invalid identifier {self.identifier}"
+
+
+class NestedDatabaseModelNotResolved(BaseException):
+    """Indicates a property was accessed before the reference was resolved"""
+
+    def __init__(self, model_cls: str, nested_model_id_value: Any) -> None:
+        """Initialize NestedDatabaseModelNotResolved
+
+        Args:
+            model_cls: The class name of the model that was being referenecd
+            nested_model_id_value: The value of the unique id for this nested model
+
+        """
+        msg = (
+            f"Object {model_cls} with id {nested_model_id_value} was not resolved."
+            f" Please call `fetch()` before trying to access properties of {model_cls}"
+        )
+
+        super().__init__(msg, msg)
