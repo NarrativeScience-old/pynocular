@@ -201,7 +201,7 @@ org2 = Org.get(org.id)
 assert org2.tech_owner.id == tech_owner.id
 assert org2.business_owner.id == business_owner.id
 
-# swap user roles
+# Swap user roles
 org2.tech_owner = business_owner
 org2.business_owner = tech_owner
 await org2.save()
