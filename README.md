@@ -208,6 +208,23 @@ await org2.save()
 org3 = await Org.get(org2.id)
 assert org3.tech_owner.id == business_owner.id
 assert org3.business_owner.id == tech_owner.id
+
+
+# Serialize org
+org_dict = org3.to_dict()
+expected_org_dict = {
+    "id": org3.id,
+    "name": "org name",
+    "slug": "org-slug",
+    "business_owner_id": tech_owner.id,
+    "tech_owner_id": business_owner.id,
+    "tag": None,
+    "created_at": org3.created_at,
+    "updated_at": org3.updated_at
+}
+
+assert org_dict == expected_org_dict
+
 ```
 
 When using `DatabaseModel.get(..)`, any foreign references will need to be resolved before any properties can be accessed that is not the primary id. If you try to access a property before calling `fetch()` on the nested model a `NestedDatabaseModelNotResolved` error will be thrown

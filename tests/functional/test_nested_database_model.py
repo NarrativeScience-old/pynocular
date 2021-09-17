@@ -238,3 +238,42 @@ async def test_nested_save() -> None:
         await org.delete()
         await tech_owner.delete()
         await business_owner.delete()
+
+
+@pytest.mark.asyncio
+async def test_serialization() -> None:
+    """Test that we can handle nested models in serialization correctly"""
+
+    try:
+        tech_owner = await User.create(id=str(uuid4()), username="owner1")
+        business_owner = await User.create(id=str(uuid4()), username="owner2")
+        org = await Org.create(
+            id=str(uuid4()),
+            name="fake org104",
+            slug="fake slug104",
+            tech_owner=tech_owner,
+            business_owner=business_owner,
+        )
+
+        expected_org_dict = {
+            "id": org.id,
+            "name": org.name,
+            "slug": org.slug,
+            "tech_owner_id": tech_owner.id,
+            "business_owner_id": business_owner.id,
+            "created_at": org.created_at,
+            "updated_at": org.updated_at,
+        }
+
+        org_dict = org.to_dict()
+        assert org_dict == expected_org_dict
+
+        # Confirm the serialization is the same regardless of if nested models are
+        # resolved
+        org = await Org.get(org.id)
+        org_dict = org.to_dict()
+        assert org_dict == expected_org_dict
+    finally:
+        await org.delete()
+        await tech_owner.delete()
+        await business_owner.delete()
