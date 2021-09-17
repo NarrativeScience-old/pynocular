@@ -383,7 +383,7 @@ If `is_conditional` is `True` and there is no transaction in the call chain, the
 
 ### Creating database and tables
 
-With Pynocular you can use simple python code to create new databases and database tables. All you need is a working connection string to the database host, a DatabaseInfo that contains the information of the database you want to create and a properly decorated pydantic model. When you decorate a Pydantic model with Pynocular, it creates a SQLAlchemy table as a private variable. This can be accessed via the `_table` property
+With Pynocular you can use simple python code to create new databases and database tables. All you need is a working connection string to the database host, a `DatabaseInfo` object that contains the information of the database you want to create, and a properly decorated pydantic model. When you decorate a pydantic model with Pynocular, it creates a SQLAlchemy table as a private variable. This can be accessed via the `_table` property
 (although accessing private variables is not recommended).
 
 ```python
