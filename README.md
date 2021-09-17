@@ -146,7 +146,7 @@ assert org == new_org
 
 Pynocular also supports basic object relationships. If your database tables have a
 foreign key reference you can leverage that in your pydantic models to increase the
-accessibility of those related objects
+accessibility of those related objects.
 
 ```python
 from pydantic import BaseModel, Field
