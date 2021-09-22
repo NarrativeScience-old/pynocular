@@ -404,7 +404,7 @@ await create_table(db_info, Org._table)
 Pynocular comes with tooling to write unit tests against your DatabaseModels, giving you
 the ability to test your business logic without the extra work and latency involved in
 managing a database. All you have to do is use the `patch_database_models` context
-manager provided in pynocular
+manager provided in pynocular.
 
 ```python
 from pynocular.patch_models import patch_database_model
