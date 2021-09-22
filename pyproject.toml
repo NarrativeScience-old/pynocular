@@ -14,7 +14,7 @@ repository = "https://github.com/NarrativeScience/pynocular"
 
 [tool.poetry.dependencies]
 python = "^3.6.5"
-aenum = "^2.1"
+aenum = "^3.1.0"
 aiocontextvars = "^0.2.2"
 aiopg = "^0.16.0"
 asyncpg = "^0.15.0"
