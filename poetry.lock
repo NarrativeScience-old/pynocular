@@ -45,22 +45,30 @@ typing-extensions = {version = "*", markers = "python_version < \"3.8\""}
 
 [[package]]
 name = "asyncpg"
-version = "0.15.0"
-description = "An asyncio PosgtreSQL driver"
+version = "0.24.0"
+description = "An asyncio PostgreSQL driver"
 category = "main"
 optional = false
-python-versions = "*"
+python-versions = ">=3.6.0"
+
+[package.dependencies]
+typing-extensions = {version = ">=3.7.4.3", markers = "python_version < \"3.8\""}
+
+[package.extras]
+dev = ["Cython (>=0.29.24,<0.30.0)", "pytest (>=6.0)", "Sphinx (>=4.1.2,<4.2.0)", "sphinxcontrib-asyncio (>=0.3.0,<0.4.0)", "sphinx-rtd-theme (>=0.5.2,<0.6.0)", "pycodestyle (>=2.7.0,<2.8.0)", "flake8 (>=3.9.2,<3.10.0)", "uvloop (>=0.15.3)"]
+docs = ["Sphinx (>=4.1.2,<4.2.0)", "sphinxcontrib-asyncio (>=0.3.0,<0.4.0)", "sphinx-rtd-theme (>=0.5.2,<0.6.0)"]
+test = ["pycodestyle (>=2.7.0,<2.8.0)", "flake8 (>=3.9.2,<3.10.0)", "uvloop (>=0.15.3)"]
 
 [[package]]
 name = "asyncpgsa"
-version = "0.23.0"
+version = "0.25.2"
 description = "sqlalchemy support for asyncpg"
 category = "main"
 optional = false
 python-versions = "*"
 
 [package.dependencies]
-asyncpg = ">=0.15.0,<0.16.0"
+asyncpg = "*"
 sqlalchemy = "*"
 
 [[package]]
@@ -788,7 +796,7 @@ testing = ["pytest (>=4.6)", "pytest-checkdocs (>=2.4)", "pytest-flake8", "pytes
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.6.5"
-content-hash = "d9a6dbce5146adbeedffda7514f87aeb4dd70ff3be42acabe61c30c1710708b4"
+content-hash = "a21c14fcdb20bafd86f4363328f4b5536eec11c346832ed4ee9f818036f0ca6a"
 
 [metadata.files]
 aenum = [
@@ -809,21 +817,22 @@ arrow = [
     {file = "arrow-1.1.1.tar.gz", hash = "sha256:dee7602f6c60e3ec510095b5e301441bc56288cb8f51def14dcb3079f623823a"},
 ]
 asyncpg = [
-    {file = "asyncpg-0.15.0-cp35-cp35m-macosx_10_12_x86_64.whl", hash = "sha256:292d9827f9db1acb681c5aabc9df02c5bf6cf58dfd733b3319d37451cb67c86b"},
-    {file = "asyncpg-0.15.0-cp35-cp35m-manylinux1_i686.whl", hash = "sha256:51dc680dc19d226bd42359ecd373e8003bb84f5130633fac1dbf6094344a6583"},
-    {file = "asyncpg-0.15.0-cp35-cp35m-manylinux1_x86_64.whl", hash = "sha256:6227c47ad43f4ead2fada7ed5643c41c27fe9a9ebf61df30d4ed8ecdca4b0f89"},
-    {file = "asyncpg-0.15.0-cp35-cp35m-win32.whl", hash = "sha256:20299847f10aa50deb47dcaec7a7903bdd13729c85c5a8a00462eef735e30691"},
-    {file = "asyncpg-0.15.0-cp35-cp35m-win_amd64.whl", hash = "sha256:02e649095049356cf40badb74fb682943fc05d5fa51c6a7d8695787654e095db"},
-    {file = "asyncpg-0.15.0-cp36-cp36m-macosx_10_12_x86_64.whl", hash = "sha256:83d7759993d36bc7a99509acbafd26a77d0a910d333e5e8ed5e43a5552a4ed15"},
-    {file = "asyncpg-0.15.0-cp36-cp36m-manylinux1_i686.whl", hash = "sha256:455d19f5efb37aa281ad5162efd981d791504b76257a9dc732c548ddfb89ccd2"},
-    {file = "asyncpg-0.15.0-cp36-cp36m-manylinux1_x86_64.whl", hash = "sha256:99e8cc315f4c5592b9758064489a510b4660b354c302aaa0a8616af93195c1e5"},
-    {file = "asyncpg-0.15.0-cp36-cp36m-win32.whl", hash = "sha256:c3ae6c33de0e0011b7b3b4f61273c5be046a623e8e6546e7c7c8c08079fb7c8b"},
-    {file = "asyncpg-0.15.0-cp36-cp36m-win_amd64.whl", hash = "sha256:6c375ba41b98b775fee348436b72ed4170a6f9f7dd960f425b56601af63c00e7"},
-    {file = "asyncpg-0.15.0.tar.gz", hash = "sha256:491ef1b6c7fc2cd054b937cbe836022d140ae920e68f39b90d78efc992631b97"},
+    {file = "asyncpg-0.24.0-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:c4fc0205fe4ddd5aeb3dfdc0f7bafd43411181e1f5650189608e5971cceacff1"},
+    {file = "asyncpg-0.24.0-cp310-cp310-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_12_x86_64.manylinux2010_x86_64.whl", hash = "sha256:a7095890c96ba36f9f668eb552bb020dddb44f8e73e932f8573efc613ee83843"},
+    {file = "asyncpg-0.24.0-cp310-cp310-win_amd64.whl", hash = "sha256:8ff5073d4b654e34bd5eaadc01dc4d68b8a9609084d835acd364cd934190a08d"},
+    {file = "asyncpg-0.24.0-cp37-cp37m-macosx_10_9_x86_64.whl", hash = "sha256:e36c6806883786b19551bb70a4882561f31135dc8105a59662e0376cf5b2cbc5"},
+    {file = "asyncpg-0.24.0-cp37-cp37m-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_12_x86_64.manylinux2010_x86_64.whl", hash = "sha256:ddffcb85227bf39cd1bedd4603e0082b243cf3b14ced64dce506a15b05232b83"},
+    {file = "asyncpg-0.24.0-cp37-cp37m-win_amd64.whl", hash = "sha256:41704c561d354bef01353835a7846e5606faabbeb846214dfcf666cf53319f18"},
+    {file = "asyncpg-0.24.0-cp38-cp38-macosx_10_9_x86_64.whl", hash = "sha256:29ef6ae0a617fc13cc2ac5dc8e9b367bb83cba220614b437af9b67766f4b6b20"},
+    {file = "asyncpg-0.24.0-cp38-cp38-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_12_x86_64.manylinux2010_x86_64.whl", hash = "sha256:eed43abc6ccf1dc02e0d0efc06ce46a411362f3358847c6b0ec9a43426f91ece"},
+    {file = "asyncpg-0.24.0-cp38-cp38-win_amd64.whl", hash = "sha256:129d501f3d30616afd51eb8d3142ef51ba05374256bd5834cec3ef4956a9b317"},
+    {file = "asyncpg-0.24.0-cp39-cp39-macosx_10_9_x86_64.whl", hash = "sha256:a458fc69051fbb67d995fdda46d75a012b5d6200f91e17d23d4751482640ed4c"},
+    {file = "asyncpg-0.24.0-cp39-cp39-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_12_x86_64.manylinux2010_x86_64.whl", hash = "sha256:556b0e92e2b75dc028b3c4bc9bd5162ddf0053b856437cf1f04c97f9c6837d03"},
+    {file = "asyncpg-0.24.0-cp39-cp39-win_amd64.whl", hash = "sha256:a738f4807c853623d3f93f0fea11f61be6b0e5ca16ea8aeb42c2c7ee742aa853"},
+    {file = "asyncpg-0.24.0.tar.gz", hash = "sha256:dd2fa063c3344823487d9ddccb40802f02622ddf8bf8a6cc53885ee7a2c1c0c6"},
 ]
 asyncpgsa = [
-    {file = "asyncpgsa-0.23.0-py3-none-any.whl", hash = "sha256:ba1f58be173df4f443b59d9af387f1f05c904815980273ec3d4ac494197417b5"},
-    {file = "asyncpgsa-0.23.0.tar.gz", hash = "sha256:a24fc00e6a072efbcbfa0397b151ecb38870f4d37dadc0a27509f99bde795994"},
+    {file = "asyncpgsa-0.25.2.tar.gz", hash = "sha256:8c835271a7f15f7f47fb2c6c1fb3a1bcc6d738133ad330cfd219e92f71a78001"},
 ]
 atomicwrites = [
     {file = "atomicwrites-1.4.0-py2.py3-none-any.whl", hash = "sha256:6d1784dea7c0c8d4a5172b6c620f40b6e4cbfdf96d783691f2e1302a7b88e197"},
