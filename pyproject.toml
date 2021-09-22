@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "pynocular"
-version = "0.6.0"
+version = "0.7.0"
 description = "Lightweight ORM that lets you query your database using Pydantic models and asyncio"
 authors = [
   "RJ Santana <ssantana@narrativescience.com>",
