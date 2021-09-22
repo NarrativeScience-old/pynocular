@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "pynocular"
-version = "0.6.0"
+version = "0.7.0"
 description = "Lightweight ORM that lets you query your database using Pydantic models and asyncio"
 authors = [
   "RJ Santana <ssantana@narrativescience.com>",
@@ -14,7 +14,7 @@ repository = "https://github.com/NarrativeScience/pynocular"
 
 [tool.poetry.dependencies]
 python = "^3.6.5"
-aenum = "^2.1"
+aenum = "^3.1.0"
 aiocontextvars = "^0.2.2"
 aiopg = "^0.16.0"
 asyncpg = "^0.15.0"
