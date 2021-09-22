@@ -41,7 +41,7 @@ testdb = DBInfo(DatabaseType.aiopg_engine, test_connection_string)
 
 @database_model("organizations", testdb)
 class Org(BaseModel):
-    """A test class for testing. Linter won't let me not have this useless comment :)"""
+    """A test database model"""
 
     id: UUID_STR = Field(primary_key=True)
     serial_id: Optional[int]
@@ -112,47 +112,56 @@ class TestDatabaseModel:
     @pytest.mark.asyncio
     async def test_get_list(self) -> None:
         """Test that we can get_list and get a subset of DatabaseModels"""
-        org1 = await Org.create(
-            id=str(uuid4()), name="orgus borgus", slug="orgus_borgus", serial_id=1
-        )
-        org2 = await Org.create(
-            id=str(uuid4()), name="orgus borgus2", slug="orgus_borgus", serial_id=1
-        )
-        org3 = await Org.create(
-            id=str(uuid4()), name="nonorgus borgus", slug="orgus_borgus", serial_id=2
-        )
-        all_orgs = await Org.select()
-        subset_orgs = await Org.get_list(serial_id=org1.serial_id)
-        assert len(subset_orgs) <= len(all_orgs)
-        await org1.delete()
-        await org2.delete()
-        await org3.delete()
+        try:
+            org1 = await Org.create(
+                id=str(uuid4()), name="orgus borgus", slug="orgus_borgus", serial_id=1
+            )
+            org2 = await Org.create(
+                id=str(uuid4()), name="orgus borgus2", slug="orgus_borgus", serial_id=1
+            )
+            org3 = await Org.create(
+                id=str(uuid4()),
+                name="nonorgus borgus",
+                slug="orgus_borgus",
+                serial_id=2,
+            )
+            all_orgs = await Org.select()
+            subset_orgs = await Org.get_list(serial_id=org1.serial_id)
+            assert len(subset_orgs) <= len(all_orgs)
+        finally:
+            await org1.delete()
+            await org2.delete()
+            await org3.delete()
 
     @pytest.mark.asyncio
     async def test_get_list__none_filter_value(self) -> None:
         """Test that we can get_list based on a None filter value"""
-        test_org = await Org.create(
-            id=uuid4(), name="orgus borgus", slug="orgus_borgus", serial_id=None
-        )
-        orgs = await Org.get_list(serial_id=None)
-        assert orgs == [test_org]
-        await test_org.delete()
+        try:
+            test_org = await Org.create(
+                id=uuid4(), name="orgus borgus", slug="orgus_borgus", serial_id=None
+            )
+            orgs = await Org.get_list(serial_id=None)
+            assert orgs == [test_org]
+        finally:
+            await test_org.delete()
 
     @pytest.mark.asyncio
     async def test_get_list__none_json_value(self) -> None:
         """Test that we can get_list for a None value on a JSON field"""
         # The None value will be persisted as a SQL NULL value rather than a JSON-encoded
         # null value when the Topic is created, so the filter value None will work here
-        base_topic = await Topic.create(
-            id=uuid4(),
-            app_id=str(uuid4()),
-            name="base topic",
-            filter_hash="fakehash123",
-            filter=None,
-        )
-        topic = await Topic.get_list(filter=None)
-        assert topic == [base_topic]
-        await base_topic.delete()
+        try:
+            base_topic = await Topic.create(
+                id=uuid4(),
+                app_id=str(uuid4()),
+                name="base topic",
+                filter_hash="fakehash123",
+                filter=None,
+            )
+            topic = await Topic.get_list(filter=None)
+            assert topic == [base_topic]
+        finally:
+            await base_topic.delete()
 
     @pytest.mark.asyncio
     async def test_create_new_record(self) -> None:

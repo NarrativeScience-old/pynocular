@@ -528,7 +528,7 @@ class DatabaseModel:
             kwargs: The values to update.
 
         Returns:
-            The updated database object
+            The updated DatabaseModel
 
         """
         where_expressions = []
