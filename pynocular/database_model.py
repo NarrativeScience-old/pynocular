@@ -621,12 +621,13 @@ class DatabaseModel:
                         # DB and the DB has the latest state
                         continue
 
-            record = await conn.execute(
+            insert_stmt = (
                 insert(self._table)
                 .values(dict_self)
                 .on_conflict_do_update(index_elements=primary_key_names, set_=dict_self)
                 .returning(self._table)
             )
+            record = await conn.execute(insert_stmt)
 
             row = await record.fetchone()
 

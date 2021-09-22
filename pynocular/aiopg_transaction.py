@@ -3,18 +3,22 @@ import asyncio
 from typing import Dict, Optional, Union
 
 import aiocontextvars as contextvars
+from aiopg.sa import Engine
 from aiopg.sa.connection import SAConnection
-import aiopg.sa.engine
+from aiopg.sa.transaction import Transaction as AioPGTransaction
+from asyncpg.connection import Connection as AsyncPGConnection
+from asyncpg.pool import Pool
+from asyncpg.transaction import Transaction as AsyncPGTransaction
 
 transaction_connections_var = contextvars.ContextVar(
     "transaction_connections", default={}
 )
 
 
-class LockedConnection(SAConnection):
+class LockedConnection:
     """A wrapper connection class that won't make multiple queries at once"""
 
-    def __init__(self, connection: SAConnection) -> None:
+    def __init__(self, connection: Union[SAConnection, AsyncPGConnection]) -> None:
         """Create a new LockedConnection
 
         Args:
@@ -28,6 +32,15 @@ class LockedConnection(SAConnection):
         """Wrapper around the `execute` method of the wrapped SAConnection"""
         async with self.lock:
             return await self._conn.execute(*args, **kwargs)
+
+    async def begin(self) -> Union[AsyncPGTransaction, AioPGTransaction]:
+        """Wrapper around `begin` method to unify interfaces of various libraries"""
+        if isinstance(self._conn, SAConnection):
+            trx = await self._conn.begin()
+        elif isinstance(self._conn, AsyncPGConnection):
+            trx = self._conn.transaction()
+            await trx.start()
+        return trx
 
     def __getattr__(self, attr):
         """Except for execute, all other attributes should pass through"""
@@ -139,7 +152,7 @@ class transaction:
 
     """
 
-    def __init__(self, engine: aiopg.sa.engine.Engine) -> None:
+    def __init__(self, engine: Union[Engine, Pool]) -> None:
         """Create a new transaction context
 
         Args:
@@ -231,18 +244,20 @@ class ConditionalTransaction(transaction):
 
     """
 
-    def __init__(self, engine: aiopg.sa.engine.Engine) -> None:
+    def __init__(self, engine: Union[Engine, Pool]) -> None:
         """Initialize the context manager
 
         Args:
-            engine: An aiopg engine
+            engine: A db connection engine
 
         """
         super().__init__(engine)
         # The connection object, if functioning as standard connection
         self._conn = None
 
-    async def __aenter__(self) -> Union[LockedConnection, SAConnection]:
+    async def __aenter__(
+        self,
+    ) -> Union[LockedConnection, SAConnection, AsyncPGConnection]:
         """Conditionally establish the transaction context
 
         Returns:

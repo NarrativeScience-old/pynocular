@@ -14,8 +14,6 @@ from asyncpg.exceptions import ConnectionDoesNotExistError
 from asyncpg.pool import Pool
 from asyncpgsa import create_pool
 import backoff
-from sqlalchemy import create_engine as create_engine_sync
-from sqlalchemy.engine import Engine as SyncEngine
 
 from pynocular.aiopg_transaction import (
     ConditionalTransaction,
@@ -82,40 +80,6 @@ async def get_aiopg_engine(
         logger.debug(f"DB engine created successfully: {engine}")
 
     logger.debug("DB engine retrieved")
-    return engine
-
-
-def get_psycopg_engine(
-    conn_str: str, force: bool = False, if_exists: bool = False
-) -> Optional[SyncEngine]:
-    """Returns the psycopg SQLAlchemy connection engine for a given connection string.
-
-    Similar to :py:func:`get_engine` except that a synchronous SQLAlchemy engine is
-    created instead.
-
-    Args:
-        conn_str: The connection string for the engine
-        force: Force the creation of the engine regardless of the cache
-        if_exists: Only return the engine if it already exists
-
-    Returns:
-        SQLAlchemy engine for the connection string
-
-    """
-    global _engines
-    logger.debug("Attempting to get sync DB engine")
-    cache_key = ("sync", conn_str)
-    engine = _engines.get(cache_key)
-
-    if if_exists and engine is None:
-        return None
-
-    if engine is None or force:
-        engine = create_engine_sync(conn_str, pool_recycle=POOL_RECYCLE)
-        _engines[cache_key] = engine
-        logger.debug(f"Sync DB engine created successfully: {engine}")
-
-    logger.debug("Sync DB engine retrieved")
     return engine
 
 
@@ -212,7 +176,6 @@ class DatabaseType(Enum):
 
     aiopg_engine = "aiopg_engine"
     asyncpgsa_pool = "asyncpgsa_pool"
-    sqlalchemy_engine = "sqlalchemy_engine"
 
 
 class DBInfo(NamedTuple):
@@ -233,7 +196,7 @@ class DBEngine:
         force: bool = False,
         application_name: str = None,
         if_exists: bool = False,
-    ) -> Optional[Union[Engine, SyncEngine, Pool]]:
+    ) -> Optional[Union[Engine, Pool]]:
         """Get an aiopg engine or asyncpg pool depending on the database configuration.
 
         Args:
@@ -266,17 +229,13 @@ class DBEngine:
                 application_name=application_name,
                 if_exists=if_exists,
             )
-        elif db_info.engine_type == DatabaseType.sqlalchemy_engine:
-            return get_psycopg_engine(
-                db_info.connection_string, force=force, if_exists=if_exists
-            )
 
         raise ValueError(f"Unsupported database type: {db_info.engine_type}")
 
     @classmethod
     async def get_engine(
         cls, db_info: DBInfo, force: bool = False, application_name: str = None
-    ) -> Union[Engine, SyncEngine]:
+    ) -> Engine:
         """Get a SQLAlchemy connection engine for a given database alias.
 
         See :py:func:`.get_engine` for more details.
@@ -357,10 +316,6 @@ class DBEngine:
             Transaction or ConditionalTransaction for use as a context manager
 
         """
-        if db_info.engine_type != DatabaseType.aiopg_engine:
-            raise ValueError(
-                f"Transaction does not support database type {db_info.engine_type}"
-            )
         engine = await cls._get_engine_or_pool(db_info)
         return ConditionalTransaction(engine) if is_conditional else Transaction(engine)
 
@@ -422,8 +377,6 @@ class DBEngine:
             pass
         elif db_info.engine_type == DatabaseType.asyncpgsa_pool:
             await pool_engine.close()
-        elif db_info.engine_type == DatabaseType.sqlalchemy_engine:
-            pool_engine.dispose()
         else:
             pool_engine.close()
             await pool_engine.wait_closed()
