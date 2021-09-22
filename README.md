@@ -399,6 +399,60 @@ await create_table(db_info, Org._table)
 
 ```
 
+### Unit Testing with DatabaseModels
+
+Pynocular comes with tooling to write unit tests against your DatabaseModels, giving you
+the ability to test your business logic without the extra work and latency involved in
+managing a database. All you have to do is use the `patch_database_models` context
+manager provided in pynocular
+
+```python
+from pynocular.patch_models import patch_database_model
+
+from my_package import Org, User
+
+
+with patch_database_model(Org):
+    orgs = [
+        Org(id=str(uuid4()), name="orgus borgus", slug="orgus_borgus"),
+        Org(id=str(uuid4()), name="orgus borgus2", slug="orgus_borgus"),
+    ]
+
+    await Org.create_list(orgs)
+    fetched_orgs = await Org.get_list(name=orgs[0].name)
+    assert orgs[0] == fetched_orgs[0]
+
+# patch_database_model also works with nested models
+users = [
+    User(id=str(uuid4()), username="Bob"),
+    User(id=str(uuid4()), username="Sally"),
+]
+orgs = [
+    Org(
+        id=str(uuid4()),
+        name="orgus borgus",
+        slug="orgus_borgus",
+        tech_owner=users[0],
+        business_owner=users[1],
+    ),
+]
+
+with patch_database_model(Org, models=orgs), patch_database_model(
+    User, models=users
+):
+    org = await Org.get(orgs[0].id)
+    org.name = "new test name"
+    users[0].username = "bberkley"
+
+    # Save the username update when saving the org model update
+    await org.save(include_nested_models=True)
+
+    # Get the org with the resolved nested model
+    org_get = await Org.get_with_refs(org.id)
+    assert org_get.name == "new test name"
+    assert org_get.tech_owner.username == "bberkley"
+```
+
 ## Development
 
 To develop pynocular, install dependencies and enable the pre-commit hook:
