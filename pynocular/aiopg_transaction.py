@@ -1,5 +1,6 @@
 """Module for aiopg transaction utils"""
 import asyncio
+import sys
 from typing import Dict, Optional, Union
 
 import aiocontextvars as contextvars
@@ -9,6 +10,20 @@ import aiopg.sa.engine
 transaction_connections_var = contextvars.ContextVar(
     "transaction_connections", default={}
 )
+
+
+def get_current_task() -> asyncio.Task:
+    """Get the current task when this method is called
+
+    Returns:
+        The current task the method is called in
+
+    """
+    if sys.version_info.major == 3 and sys.version_info.minor > 7:
+        # If this is version 3.7 or higher then use the new function to get the current task
+        return asyncio.current_task()
+    else:
+        return asyncio.Task.current_task()
 
 
 class LockedConnection(SAConnection):
@@ -55,7 +70,7 @@ class TaskContextConnection:
 
         # Set the asyncio task context if it's not set already. We'll look in the
         # context for an open connection.
-        task = asyncio.Task.current_task()
+        task = get_current_task()
         if not hasattr(task, "context"):
             task.context = contextvars.copy_context()
 
@@ -63,9 +78,7 @@ class TaskContextConnection:
     def _get_connections(cls) -> Dict[str, LockedConnection]:
         """Get the map of connections from the task context"""
         global transaction_connections_var
-        return asyncio.Task.current_task().context.get(
-            transaction_connections_var, default={}
-        )
+        return transaction_connections_var.get()
 
     def get(self) -> Optional[LockedConnection]:
         """If there is already a connection stored, get it"""
