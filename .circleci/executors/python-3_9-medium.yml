@@ -1,0 +1,12 @@
+docker:
+  - image: cimg/python:3.9
+    environment:
+      EXISTING_DB_NAME: circle_test
+      TEST_DB_NAME: test_db
+      DB_USER_NAME: postgres
+      DB_USER_PASSWORD: $CIRCLE_SHA1
+  - image: circleci/postgres:11-alpine-ram
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: $CIRCLE_SHA1
+resource_class: medium
