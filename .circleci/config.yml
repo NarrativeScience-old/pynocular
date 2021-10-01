@@ -218,7 +218,7 @@ executors:
         docker:
             - image: cimg/python:3.6
         resource_class: small
-    python-medium:
+    python-3_6-medium:
         docker:
             - environment:
                 DB_USER_NAME: postgres
@@ -229,12 +229,61 @@ executors:
             - environment:
                 POSTGRES_PASSWORD: $CIRCLE_SHA1
                 POSTGRES_USER: postgres
-              image: circleci/postgres:11-alpine-ram
+              image: circleci/postgres:12-alpine-ram
+        resource_class: medium
+    python-3_7-medium:
+        docker:
+            - environment:
+                DB_USER_NAME: postgres
+                DB_USER_PASSWORD: $CIRCLE_SHA1
+                EXISTING_DB_NAME: circle_test
+                TEST_DB_NAME: test_db
+              image: cimg/python:3.7
+            - environment:
+                POSTGRES_PASSWORD: $CIRCLE_SHA1
+                POSTGRES_USER: postgres
+              image: circleci/postgres:12-alpine-ram
+        resource_class: medium
+    python-3_8-medium:
+        docker:
+            - environment:
+                DB_USER_NAME: postgres
+                DB_USER_PASSWORD: $CIRCLE_SHA1
+                EXISTING_DB_NAME: circle_test
+                TEST_DB_NAME: test_db
+              image: cimg/python:3.8
+            - environment:
+                POSTGRES_PASSWORD: $CIRCLE_SHA1
+                POSTGRES_USER: postgres
+              image: circleci/postgres:12-alpine-ram
+        resource_class: medium
+    python-3_9-medium:
+        docker:
+            - environment:
+                DB_USER_NAME: postgres
+                DB_USER_PASSWORD: $CIRCLE_SHA1
+                EXISTING_DB_NAME: circle_test
+                TEST_DB_NAME: test_db
+              image: cimg/python:3.9
+            - environment:
+                POSTGRES_PASSWORD: $CIRCLE_SHA1
+                POSTGRES_USER: postgres
+              image: circleci/postgres:12-alpine-ram
         resource_class: medium
 jobs:
     build-test:
         description: Test building with Poetry, Cruft, pre-commit, and run unit tests with pytest.
-        executor: python-medium
+        executor: python-<< parameters.python_version >>-medium
+        parameters:
+            python_version:
+                default: "3_9"
+                description: Python version to use as the executor
+                enum:
+                    - "3_6"
+                    - "3_7"
+                    - "3_8"
+                    - "3_9"
+                type: enum
         steps:
             - add_ssh_keys:
                 fingerprints:
@@ -304,4 +353,11 @@ workflows:
                     branches:
                         ignore:
                             - main
+                matrix:
+                    parameters:
+                        python_version:
+                            - "3_6"
+                            - "3_7"
+                            - "3_8"
+                            - "3_9"
 

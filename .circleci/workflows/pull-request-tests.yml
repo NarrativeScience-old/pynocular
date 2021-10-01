@@ -5,3 +5,6 @@ jobs:
         branches:
           ignore:
             - main
+      matrix:
+        parameters:
+          python_version: ["3_6", "3_7", "3_8", "3_9"]
