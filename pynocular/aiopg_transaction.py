@@ -17,7 +17,7 @@ def get_current_task() -> asyncio.Task:
 
     Returns:
         The current task the method is called in
-    
+
     """
     if sys.version_info.major == 3 and sys.version_info.minor > 7:
         # If this is version 3.7 or higher then use the new function to get the current task
@@ -170,7 +170,6 @@ class transaction:
 
         # Initiatize an interface for managing the connection on the asyncio task context
         self.task_connection = TaskContextConnection(str(engine))
-
 
     async def __aenter__(self) -> LockedConnection:
         """Establish the transaction context
