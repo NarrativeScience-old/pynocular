@@ -7,4 +7,4 @@ jobs:
             - main
       matrix:
         parameters:
-          python_version: ["3_6", "3_9"]
+          python_version: ["3_6", "3_7", "3_8", "3_9"]
