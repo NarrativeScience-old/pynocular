@@ -102,12 +102,17 @@ class TestDatabaseModel:
     @pytest.mark.asyncio
     async def test_select(self) -> None:
         """Test that we can select the full set of DatabaseModels"""
-        org = await Org.create(
-            id=str(uuid4()), name="orgus borgus", slug="orgus_borgus", serial_id=None
-        )
-        all_orgs = await Org.select()
-        assert len(all_orgs) > 0
-        await org.delete()
+        try:
+            org = await Org.create(
+                id=str(uuid4()),
+                name="orgus borgus",
+                slug="orgus_borgus",
+                serial_id=None,
+            )
+            all_orgs = await Org.select()
+            assert len(all_orgs) > 0
+        finally:
+            await org.delete()
 
     @pytest.mark.asyncio
     async def test_get_list(self) -> None:
