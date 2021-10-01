@@ -1,5 +1,11 @@
 description: Test building with Poetry, Cruft, pre-commit, and run unit tests with pytest.
-executor: python-3_9-medium
+parameters:
+  python_version:
+    description: Python version to use as the executor
+    default: "3_6"
+    type: enum
+    enum: ["3_6", "3_9"]
+executor: python-<< parameters.python_version >>-medium
 steps:
   - add_ssh_keys:
       fingerprints:

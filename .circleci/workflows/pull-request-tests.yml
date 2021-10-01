@@ -1,13 +1,10 @@
 jobs:
-  - build-test-3_6:
+  - build-test:
       context: opensource
       filters:
         branches:
           ignore:
             - main
-  - build-test-3_9:
-      context: opensource
-      filters:
-        branches:
-          ignore:
-            - main
+      matrix:
+        parameters:
+          python_version: ["3_6", "3_9"]
