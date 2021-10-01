@@ -1,5 +1,11 @@
 jobs:
-  - build-test:
+  - build-test-3_6:
+      context: opensource
+      filters:
+        branches:
+          ignore:
+            - main
+  - build-test-3_9:
       context: opensource
       filters:
         branches:

@@ -218,7 +218,7 @@ executors:
         docker:
             - image: cimg/python:3.6
         resource_class: small
-    python-medium:
+    python-3_6-medium:
         docker:
             - environment:
                 DB_USER_NAME: postgres
@@ -231,10 +231,58 @@ executors:
                 POSTGRES_USER: postgres
               image: circleci/postgres:11-alpine-ram
         resource_class: medium
+    python-3_9-medium:
+        docker:
+            - environment:
+                DB_USER_NAME: postgres
+                DB_USER_PASSWORD: $CIRCLE_SHA1
+                EXISTING_DB_NAME: circle_test
+                TEST_DB_NAME: test_db
+              image: cimg/python:3.9
+            - environment:
+                POSTGRES_PASSWORD: $CIRCLE_SHA1
+                POSTGRES_USER: postgres
+              image: circleci/postgres:11-alpine-ram
+        resource_class: medium
 jobs:
-    build-test:
+    build-test-3_6:
         description: Test building with Poetry, Cruft, pre-commit, and run unit tests with pytest.
-        executor: python-medium
+        executor: python-3_6-medium
+        steps:
+            - add_ssh_keys:
+                fingerprints:
+                    - cb:4c:e2:f4:c2:be:b7:c0:1a:02:1b:13:15:e0:a4:1b
+            - ghpr/build-prospective-branch
+            - aws-cli/install
+            - circleci-cli/install
+            - poetry-configure
+            - bump-branch-version
+            - run:
+                command: poetry install
+                name: Install dependencies
+            - run:
+                command: poetry build
+                name: Build artifact with Poetry
+            - run:
+                command: poetry run cruft check
+                name: Cruft check
+            - run:
+                command: |
+                    poetry run pre-commit install
+                    poetry run pre-commit run \
+                      --source "origin/${GITHUB_PR_BASE_BRANCH}" \
+                      --origin "origin/${CIRCLE_BRANCH}" \
+                      --show-diff-on-failure
+                name: Run commit hooks
+            - run: poetry run pytest --junit-xml .junit/unit/results.xml
+            - store_test_results:
+                path: .junit
+            - ghpr/post-pr-comment:
+                comment: Tests failed!
+                when: on_fail
+    build-test-3_9:
+        description: Test building with Poetry, Cruft, pre-commit, and run unit tests with pytest.
+        executor: python-3_9-medium
         steps:
             - add_ssh_keys:
                 fingerprints:
@@ -298,7 +346,13 @@ workflows:
                         only: /v[0-9]+(\.[0-9]+)*/
     pull-request-tests:
         jobs:
-            - build-test:
+            - build-test-3_6:
+                context: opensource
+                filters:
+                    branches:
+                        ignore:
+                            - main
+            - build-test-3_9:
                 context: opensource
                 filters:
                     branches:
