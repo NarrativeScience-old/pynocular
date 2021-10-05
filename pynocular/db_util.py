@@ -5,7 +5,6 @@ import re
 
 from aiopg.sa.connection import SAConnection
 import sqlalchemy as sa
-from sqlalchemy.exc import TimeoutError
 from sqlalchemy.sql.ddl import CreateTable
 
 from pynocular.engines import DatabaseType, DBEngine, DBInfo
@@ -28,12 +27,12 @@ async def is_database_available(db_info: DBInfo) -> bool:
     try:
         engine = await DBEngine.get_engine(db_info)
         await engine.acquire()
-    except TimeoutError:
+        return True
+    except Exception:
         return False
     finally:
         if engine:
             engine.close()
-        return True
 
 
 async def create_new_database(connection_string: str, db_name: str) -> None:
