@@ -1,6 +1,5 @@
 """Tests for the db_util module"""
 import os
-from unittest import TestCase
 
 import pytest
 
@@ -18,7 +17,7 @@ test_connection_string = str(
 test_db = DBInfo(DatabaseType.aiopg_engine, test_connection_string)
 
 
-class TestDBUtil(TestCase):
+class TestDBUtil:
     """Test cases for DB util functions"""
 
     @pytest.mark.asyncio

@@ -31,7 +31,8 @@ async def is_database_available(db_info: DBInfo) -> bool:
     except TimeoutError:
         return False
     finally:
-        engine.close()
+        if engine:
+            engine.close()
         return True
 
 
