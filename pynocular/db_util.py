@@ -13,6 +13,28 @@ from pynocular.exceptions import InvalidSqlIdentifierErr
 logger = logging.getLogger()
 
 
+async def is_database_available(db_info: DBInfo) -> bool:
+    """Check if the database is available
+
+    Args:
+        db_info: A database's connection information
+
+    Returns:
+        true if the DB exists
+
+    """
+    engine = None
+    try:
+        engine = await DBEngine.get_engine(db_info)
+        await engine.acquire()
+        return True
+    except Exception:
+        return False
+    finally:
+        if engine:
+            engine.close()
+
+
 async def create_new_database(connection_string: str, db_name: str) -> None:
     """Create a new database database for testing
 
