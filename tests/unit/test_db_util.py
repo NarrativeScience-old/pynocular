@@ -1,8 +1,8 @@
 """Tests for the db_util module"""
 import os
-import pytest
-
 from unittest import TestCase
+
+import pytest
 
 from pynocular.db_util import is_database_available
 from pynocular.engines import DatabaseType, DBInfo

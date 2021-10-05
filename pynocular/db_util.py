@@ -5,8 +5,8 @@ import re
 
 from aiopg.sa.connection import SAConnection
 import sqlalchemy as sa
-from sqlalchemy.sql.ddl import CreateTable
 from sqlalchemy.exc import TimeoutError
+from sqlalchemy.sql.ddl import CreateTable
 
 from pynocular.engines import DatabaseType, DBEngine, DBInfo
 from pynocular.exceptions import InvalidSqlIdentifierErr
