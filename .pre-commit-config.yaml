@@ -85,3 +85,11 @@ repos:
         entry: .githooks/pre-commit-scripts/circleci.sh
         language: script
         files: '^\.circleci/'
+
+      - id: cruft-check
+        name: Check project's Cruft (Cruft)
+        entry: .githooks/pre-commit-scripts/cruft-check.sh
+        language: python
+        additional_dependencies: [cruft==2.9.0]
+        always_run: true
+        stages: [push]

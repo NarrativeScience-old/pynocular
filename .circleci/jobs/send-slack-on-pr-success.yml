@@ -1,0 +1,7 @@
+description: Send a Slack message to the PR author on PR workflow success.
+executor: default
+steps:
+  - ghpr/slack-pr-author:
+      message: ':ci-success: PR tests have passed!'
+      get_slack_user_by: meseeks
+      color: "#4cb79c"

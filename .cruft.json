@@ -1,6 +1,6 @@
 {
   "template": "https://github.com/NarrativeScience/cookiecutter-python-lib",
-  "commit": "c0344678b29ccb03a7775bed55a202a8453161ee",
+  "commit": "9e14f244710d27b6ddf3f6a88e107488b7d3208e",
   "context": {
     "cookiecutter": {
       "package_name": "pynocular",

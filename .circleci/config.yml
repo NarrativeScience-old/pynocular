@@ -213,10 +213,60 @@ commands:
                     pip install poetry
                     poetry config pypi-token.pypi "$POETRY_PYPI_TOKEN_PYPI"
                 name: Configure Poetry
+    restore-test-cache:
+        description: Restores the build-test cache for pyenv, poetry, and pre-commit
+        steps:
+            - restore_cache:
+                keys:
+                    - v2-pyenv-{{ arch }}-pynocular-{{ checksum "poetry.lock" }}
+            - restore_cache:
+                keys:
+                    - v2-poetry-{{ arch }}-pynocular-{{ checksum "poetry.lock" }}
+            - restore_cache:
+                keys:
+                    - v2-precommit-{{ arch }}-pynocular-{{ checksum ".pre-commit-config.yaml" }}
+    save-test-cache:
+        description: Stores the build-test cache for pyenv, poetry, and pre-commit
+        steps:
+            - save_cache:
+                key: v2-pyenv-{{ arch }}-pynocular-{{ checksum "poetry.lock" }}
+                paths:
+                    - ~/.pyenv
+            - save_cache:
+                key: v2-poetry-{{ arch }}-pynocular-{{ checksum "poetry.lock" }}
+                paths:
+                    - ~/.cache/pypoetry
+            - save_cache:
+                key: v2-precommit-{{ arch }}-pynocular-{{ checksum ".pre-commit-config.yaml" }}
+                paths:
+                    - ~/.cache/pre-commit
+    store-test-artifacts:
+        description: Store test artifacts in CCI workflow run
+        parameters:
+            artifacts_path:
+                description: The absolute path to the artifacts stored as an env var
+                type: string
+            artifacts_storage_dir:
+                default: << parameters.artifacts_path >>
+                description: The directory in /tmp where we want to store the artifacts
+                type: string
+            export_test_results:
+                default: false
+                description: Whether or not to upload the artifacts as Test Summary metadata
+                type: boolean
+        steps:
+            - store_artifacts:
+                destination: << parameters.artifacts_storage_dir >>
+                path: << parameters.artifacts_path >>
+            - when:
+                condition: << parameters.export_test_results >>
+                steps:
+                    - store_test_results:
+                        path: << parameters.artifacts_path >>
 executors:
     default:
         docker:
-            - image: cimg/python:3.6
+            - image: cimg/python:3.9
         resource_class: small
     python-3_6-medium:
         docker:
@@ -291,6 +341,7 @@ jobs:
             - ghpr/build-prospective-branch
             - aws-cli/install
             - circleci-cli/install
+            - restore-test-cache
             - poetry-configure
             - bump-branch-version
             - run:
@@ -310,11 +361,19 @@ jobs:
                       --origin "origin/${CIRCLE_BRANCH}" \
                       --show-diff-on-failure
                 name: Run commit hooks
-            - run: poetry run pytest --junit-xml .junit/unit/results.xml
-            - store_test_results:
-                path: .junit
-            - ghpr/post-pr-comment:
-                comment: Tests failed!
+            - run:
+                command: |
+                    mkdir -p test-results/unit
+                    poetry run pytest --junit-xml test-results/unit/results.xml
+                name: Run tests
+            - store-test-artifacts:
+                artifacts_path: test-results
+                export_test_results: true
+            - save-test-cache
+            - ghpr/slack-pr-author:
+                color: '#fcaaa3'
+                get_slack_user_by: meseeks
+                message: ':ci-fail: Tests failed'
                 when: on_fail
     poetry-publish:
         description: Publish a release of the project
@@ -328,6 +387,14 @@ jobs:
             - run: poetry install
             - run: poetry build
             - run: poetry publish
+    send-slack-on-pr-success:
+        description: Send a Slack message to the PR author on PR workflow success.
+        executor: default
+        steps:
+            - ghpr/slack-pr-author:
+                color: '#4cb79c'
+                get_slack_user_by: meseeks
+                message: ':ci-success: PR tests have passed!'
 orbs:
     aws-cli: circleci/aws-cli@2.0.3
     circleci-cli: circleci/circleci-cli@0.1.9

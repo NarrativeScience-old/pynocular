@@ -13,6 +13,7 @@ steps:
   - ghpr/build-prospective-branch
   - aws-cli/install
   - circleci-cli/install
+  - restore-test-cache
   - poetry-configure
   - bump-branch-version
   - run:
@@ -32,9 +33,17 @@ steps:
           --source "origin/${GITHUB_PR_BASE_BRANCH}" \
           --origin "origin/${CIRCLE_BRANCH}" \
           --show-diff-on-failure
-  - run: poetry run pytest --junit-xml .junit/unit/results.xml
-  - store_test_results:
-      path: .junit
-  - ghpr/post-pr-comment:
-      comment: Tests failed!
+  - run:
+      name: Run tests
+      command: |
+        mkdir -p test-results/unit
+        poetry run pytest --junit-xml test-results/unit/results.xml
+  - store-test-artifacts:
+      artifacts_path: test-results
+      export_test_results: true
+  - save-test-cache
+  - ghpr/slack-pr-author:
       when: on_fail
+      message: ':ci-fail: Tests failed'
+      get_slack_user_by: meseeks
+      color: "#fcaaa3"
