@@ -3,30 +3,20 @@ import asyncio
 from enum import Enum
 from functools import wraps
 import logging
-import ssl
 from typing import Any, Callable, Dict, NamedTuple, Optional, Tuple, Union
-from urllib.parse import parse_qs
 
 from aiopg import Connection as AIOPGConnection
 from aiopg.sa import create_engine, Engine
-from asyncpg.connection import Connection as AsyncPGConnection
-from asyncpg.exceptions import ConnectionDoesNotExistError
-from asyncpg.pool import Pool
-from asyncpgsa import create_pool
-import backoff
-from sqlalchemy import create_engine as create_engine_sync
-from sqlalchemy.engine import Engine as SyncEngine
 
 from pynocular.aiopg_transaction import (
     ConditionalTransaction,
     transaction as Transaction,
 )
-from pynocular.config import DB_POOL_MAX_SIZE, DB_POOL_MIN_SIZE, POOL_RECYCLE
+from pynocular.config import POOL_RECYCLE
 
 logger = logging.getLogger(__name__)
 
 _engines: Dict[Tuple[str, str], Engine] = {}
-_pools: Dict[Tuple[str, str], Pool] = {}
 
 
 async def get_aiopg_engine(
@@ -85,134 +75,10 @@ async def get_aiopg_engine(
     return engine
 
 
-def get_psycopg_engine(
-    conn_str: str, force: bool = False, if_exists: bool = False
-) -> Optional[SyncEngine]:
-    """Returns the psycopg SQLAlchemy connection engine for a given connection string.
-
-    Similar to :py:func:`get_engine` except that a synchronous SQLAlchemy engine is
-    created instead.
-
-    Args:
-        conn_str: The connection string for the engine
-        force: Force the creation of the engine regardless of the cache
-        if_exists: Only return the engine if it already exists
-
-    Returns:
-        SQLAlchemy engine for the connection string
-
-    """
-    global _engines
-    logger.debug("Attempting to get sync DB engine")
-    cache_key = ("sync", conn_str)
-    engine = _engines.get(cache_key)
-
-    if if_exists and engine is None:
-        return None
-
-    if engine is None or force:
-        engine = create_engine_sync(conn_str, pool_recycle=POOL_RECYCLE)
-        _engines[cache_key] = engine
-        logger.debug(f"Sync DB engine created successfully: {engine}")
-
-    logger.debug("Sync DB engine retrieved")
-    return engine
-
-
-@backoff.on_exception(
-    backoff.expo, ConnectionDoesNotExistError, max_tries=8, jitter=backoff.random_jitter
-)
-async def get_asyncpgsa_pool(
-    conn_str: str,
-    force: bool = False,
-    application_name: str = None,
-    if_exists: bool = False,
-) -> Optional[Pool]:
-    """Returns the asyncpgsa connection pool for a given connection string.
-
-    This function lazily creates the connection pool if it doesn't already
-    exist. Callers of this function shouldn't close the pool. It will be
-    closed automatically when the process exits.
-
-    This function exists to keep a single pool per database, which prevents us
-    from maxing out the number of connections the database server will give us.
-
-    We include the hash of the event loop in the cache key because otherwise, if the
-    event loop closes, the cached pool will raise an exception when it's used.
-
-    Args:
-        conn_str: The connection string for the engine
-        force: Force the creation of the pool regardless of the cache
-        application_name: Arbitrary string that shows up in queries to the
-            ``pg_stat_activity`` view for tracking the source of database connections.
-        if_exists: Only return the pool if it already exists
-
-    Returns:
-        The aiopgsa pool for that connection
-
-    """
-    global _pools
-    logger.debug("Attempting to get/create the db pool")
-    loop_hash = str(hash(asyncio.get_event_loop()))
-    cache_key = (loop_hash, conn_str)
-    pool = _pools.get(cache_key)
-
-    # Split the query params from the connection string
-    parsed_conn = conn_str.split("?")
-    conn_str = parsed_conn[0]
-    ssl_cert_path = None
-
-    if len(parsed_conn) > 1:
-        query_params = parse_qs(parsed_conn[1])
-        if "sslrootcert" in query_params:
-            ssl_cert_path = query_params["sslrootcert"][0]
-
-    if if_exists and pool is None:
-        return None
-
-    if pool is None or force or pool._closed:
-        options = {}
-        if application_name is not None:
-            options["server_settings"] = {"application_name": application_name}
-        if ssl_cert_path is not None:
-            ssl_context = ssl.create_default_context()
-            ssl_context.load_verify_locations(cafile=ssl_cert_path)
-            options["ssl"] = ssl_context  # type: ignore
-        try:
-            pool = await create_pool(
-                conn_str,
-                min_size=DB_POOL_MIN_SIZE,
-                max_size=DB_POOL_MAX_SIZE,
-                max_inactive_connection_lifetime=POOL_RECYCLE,
-                **options,
-            )
-        except Exception as e:
-            logger.error(
-                {
-                    "description": "Failed to create asyncpg connection pool",
-                    "application_name": application_name,
-                    "min_size": DB_POOL_MIN_SIZE,
-                    "max_size": DB_POOL_MAX_SIZE,
-                    "force": force,
-                    "if_exists": if_exists,
-                    "error_msg": repr(e),
-                }
-            )
-            raise e
-
-        _pools[cache_key] = pool
-        logger.debug(f"Created new asyncpg pool: {pool}")
-
-    logger.debug("Connection pool successfully retrieved")
-    return pool
-
-
 class DatabaseType(Enum):
     """Database type to differentiate engines and pools"""
 
     aiopg_engine = "aiopg_engine"
-    asyncpgsa_pool = "asyncpgsa_pool"
-    sqlalchemy_engine = "sqlalchemy_engine"
 
 
 class DBInfo(NamedTuple):
@@ -227,14 +93,14 @@ class DBEngine:
     """Wrapper over database engine types"""
 
     @classmethod
-    async def _get_engine_or_pool(
+    async def _get_engine(
         cls,
         db_info: DBInfo,
         force: bool = False,
         application_name: str = None,
         if_exists: bool = False,
-    ) -> Optional[Union[Engine, SyncEngine, Pool]]:
-        """Get an aiopg engine or asyncpg pool depending on the database configuration.
+    ) -> Optional[Engine]:
+        """Get an async db engine depending on the database configuration.
 
         Args:
             db_info: Information for making the database connection
@@ -259,24 +125,13 @@ class DBEngine:
                 application_name=application_name,
                 if_exists=if_exists,
             )
-        elif db_info.engine_type == DatabaseType.asyncpgsa_pool:
-            return await get_asyncpgsa_pool(
-                db_info.connection_string,
-                force=force,
-                application_name=application_name,
-                if_exists=if_exists,
-            )
-        elif db_info.engine_type == DatabaseType.sqlalchemy_engine:
-            return get_psycopg_engine(
-                db_info.connection_string, force=force, if_exists=if_exists
-            )
 
         raise ValueError(f"Unsupported database type: {db_info.engine_type}")
 
     @classmethod
     async def get_engine(
         cls, db_info: DBInfo, force: bool = False, application_name: str = None
-    ) -> Union[Engine, SyncEngine]:
+    ) -> Union[Engine]:
         """Get a SQLAlchemy connection engine for a given database alias.
 
         See :py:func:`.get_engine` for more details.
@@ -292,39 +147,12 @@ class DBEngine:
             database engine
 
         """
-        return await cls._get_engine_or_pool(
+        return await cls._get_engine(
             db_info, force=force, application_name=application_name
         )
 
     @classmethod
-    async def get_pool(
-        cls, db_info: DBInfo, force: bool = False, application_name: str = None
-    ) -> Pool:
-        """Get a asyncpgsa connection pool for a given database alias.
-
-        See :py:func:`.get_pool` for more details.
-
-        Args:
-            db_info: database connection information
-            force: Force the creation of the pool regardless of the cache
-            application_name: Arbitrary string that shows up in queries to the
-                ``pg_stat_activity`` view for tracking the source of database
-                connections.
-
-        Returns:
-            database connection pool
-
-        """
-        if db_info.engine_type != DatabaseType.asyncpgsa_pool:
-            raise ValueError(f"Cannot get a connection pool with {db_info.engine_type}")
-        return await cls._get_engine_or_pool(
-            db_info, force=force, application_name=application_name
-        )
-
-    @classmethod
-    async def acquire(
-        cls, db_info: DBInfo
-    ) -> Union[AIOPGConnection, AsyncPGConnection]:
+    async def acquire(cls, db_info: DBInfo) -> Union[AIOPGConnection]:
         """Acquire a SQLAlchemy connection for a given database alias.
 
         This is a convenience function that first gets/creates the engine or pool then
@@ -337,7 +165,7 @@ class DBEngine:
             context manager that yields the connection
 
         """
-        engine = await cls._get_engine_or_pool(db_info)
+        engine = await cls._get_engine(db_info)
         return engine.acquire()
 
     @classmethod
@@ -361,7 +189,7 @@ class DBEngine:
             raise ValueError(
                 f"Transaction does not support database type {db_info.engine_type}"
             )
-        engine = await cls._get_engine_or_pool(db_info)
+        engine = await cls._get_engine(db_info)
         return ConditionalTransaction(engine) if is_conditional else Transaction(engine)
 
     @classmethod
@@ -416,14 +244,10 @@ class DBEngine:
 
         """
         logger.info("Closing database engine")
-        pool_engine = await cls._get_engine_or_pool(db_info, if_exists=True)
+        pool_engine = await cls._get_engine(db_info, if_exists=True)
         if pool_engine is None:
             # The engine/pool doesn't exist so nothing to close
             pass
-        elif db_info.engine_type == DatabaseType.asyncpgsa_pool:
-            await pool_engine.close()
-        elif db_info.engine_type == DatabaseType.sqlalchemy_engine:
-            pool_engine.dispose()
         else:
             pool_engine.close()
             await pool_engine.wait_closed()
