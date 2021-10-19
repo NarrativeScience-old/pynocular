@@ -54,13 +54,6 @@ connection_string = f"postgresql://{db_user_name}:{db_user_password}@localhost:5
 db_info = DBInfo(connection_string)
 ```
 
-Pynocular uses the asynchronous engine provided by aiopg to connect to your database. You can choose to use a
-different engine by providing a different engine_type value to `DBInfo`.
-```python
-db_info = DBInfo(connection_string, engine_type=DatabaseAlias.asyncpg_engine)
-```
-All other engine options are experimental and do not support all of the functionality Pynocular provides.
-
 #### Object Management
 
 Once you define a `db_info` object, you are ready to decorate your Pydantic models and interact with your database!
