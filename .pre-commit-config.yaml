@@ -49,21 +49,21 @@ repos:
         entry: isort
         language: python
         types: [file, python]
-        additional_dependencies: [isort==4.3.16]
+        additional_dependencies: [isort==5.9.3]
 
       - id: black
         name: Format Python (black)
         entry: black
         language: python
         types: [file, python]
-        additional_dependencies: [black==21.7b0]
+        additional_dependencies: [black==21.9b0]
 
       - id: pydocstyle
         name: Lint Python docstrings (pydocstyle)
         entry: pydocstyle
         language: python
         types: [file, python]
-        additional_dependencies: [pydocstyle==5.0.2]
+        additional_dependencies: [pydocstyle==6.1.1]
         exclude: >
           (?x)^(
             .*__init__.py$|
@@ -76,7 +76,7 @@ repos:
         language: python
         types: [file, python]
         additional_dependencies:
-          - flake8==3.7.9
+          - flake8==3.9.2
           - "flake8-import-order<0.19,>=0.18"
           - flake8-print>=3.1.4,<4
 

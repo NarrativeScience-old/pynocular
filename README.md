@@ -51,11 +51,15 @@ from pynocular.engines import DatabaseType, DBInfo
 # Example below shows how to connect to a locally-running Postgres database
 connection_string = f"postgresql://{db_user_name}:{db_user_password}@localhost:5432/{db_name}?sslmode=disable"
 )
-db_info = DBInfo(DatabaseType.aiopg_engine, connection_string)
+db_info = DBInfo(connection_string)
 ```
 
-Pynocular supports connecting to your database through two different asyncio engines; aiopg and asyncpgsa.
-You can pick which one you want to use by passing the correct `DatabaseType` enum value into `DBInfo`.
+Pynocular uses the asynchronous engine provided by aiopg to connect to your database. You can choose to use a
+different engine by providing a different engine_type value to `DBInfo`.
+```python
+db_info = DBInfo(connection_string, engine_type=DatabaseAlias.asyncpg_engine)
+```
+All other engine options are expiremental and do not support all of the functionally Pynocular provides.
 
 #### Object Management
 
@@ -455,7 +459,19 @@ with patch_database_model(Org, models=orgs), patch_database_model(
 
 ## Development
 
-To develop pynocular, install dependencies and enable the pre-commit hook:
+To develop pynocular, install dependencies and enable the pre-commit hook.
+
+The example below is using Python 3.9 but you can replace this with any supported version of Python.
+
+Install Python 3.9 and activate it in your shell.
+
+```bash
+sudo yum install libffi-devel # Needed for ctypes to install poetry
+pyenv install 3.9.7
+pyenv shell 3.9.7
+```
+
+Install dependencies and enable the pre-commit hook.
 
 ```bash
 pip install pre-commit poetry
@@ -463,7 +479,7 @@ poetry install
 pre-commit install
 ```
 
-To run tests:
+Run tests to confirm everything is installed correctly.
 
 ```bash
 poetry run pytest

@@ -15,7 +15,7 @@ from pynocular.db_util import (
     create_table,
     drop_table,
 )
-from pynocular.engines import DatabaseType, DBEngine, DBInfo
+from pynocular.engines import DBEngine, DBInfo
 from pynocular.exceptions import NestedDatabaseModelNotResolved
 
 db_user_password = str(os.environ.get("DB_USER_PASSWORD"))
@@ -34,7 +34,7 @@ test_connection_string = str(
         f"postgresql://postgres:{db_user_password}@localhost:5432/{test_db_name}?sslmode=disable",
     )
 )
-testdb = DBInfo(DatabaseType.aiopg_engine, test_connection_string)
+testdb = DBInfo(test_connection_string)
 
 
 @database_model("users", testdb)

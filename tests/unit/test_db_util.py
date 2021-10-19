@@ -14,7 +14,7 @@ test_connection_string = str(
         f"postgresql://postgres:{db_user_password}@localhost:5432/{test_db_name}?sslmode=disable",
     )
 )
-test_db = DBInfo(DatabaseType.aiopg_engine, test_connection_string)
+test_db = DBInfo(test_connection_string)
 
 
 class TestDBUtil:

@@ -6,12 +6,12 @@ from pydantic import BaseModel, Field
 import pytest
 
 from pynocular.database_model import database_model, nested_model, UUID_STR
-from pynocular.engines import DatabaseType, DBInfo
+from pynocular.engines import DBInfo
 from pynocular.patch_models import patch_database_model
 
 # With the `patch_database_model` we don't need a database connection
 test_connection_string = "fake connection string"
-testdb = DBInfo(DatabaseType.aiopg_engine, test_connection_string)
+testdb = DBInfo(test_connection_string)
 
 
 @database_model("users", testdb)
