@@ -1,4 +1,4 @@
-# pynocular
+# Pynocular
 
 [![](https://img.shields.io/pypi/v/pynocular.svg)](https://pypi.org/pypi/pynocular/) [![License](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](https://opensource.org/licenses/BSD-3-Clause)
 
@@ -27,7 +27,7 @@ Table of Contents:
 
 ## Installation
 
-pynocular requires Python 3.6 or above.
+Pynocular requires Python 3.6 or above.
 
 ```bash
 pip install pynocular
@@ -408,7 +408,7 @@ await create_table(db_info, Org._table)
 Pynocular comes with tooling to write unit tests against your DatabaseModels, giving you
 the ability to test your business logic without the extra work and latency involved in
 managing a database. All you have to do is use the `patch_database_model` context
-manager provided in pynocular.
+manager provided in Pynocular.
 
 ```python
 from pynocular.patch_models import patch_database_model
@@ -459,7 +459,7 @@ with patch_database_model(Org, models=orgs), patch_database_model(
 
 ## Development
 
-To develop pynocular, install dependencies and enable the pre-commit hook.
+To develop Pynocular, install dependencies and enable the pre-commit hook.
 
 The example below is using Python 3.9 but you can replace this with any supported version of Python.
 
