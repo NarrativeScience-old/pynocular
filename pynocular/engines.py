@@ -218,9 +218,9 @@ class DatabaseType(Enum):
 class DBInfo(NamedTuple):
     """Data class for a database's connection information"""
 
-    engine_type: DatabaseType
     connection_string: str
     enable_hstore: bool = True
+    engine_type: DatabaseType = DatabaseType.aiopg_engine
 
 
 class DBEngine:

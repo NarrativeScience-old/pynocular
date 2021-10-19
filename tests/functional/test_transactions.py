@@ -8,7 +8,7 @@ import pytest
 
 from pynocular.database_model import database_model, UUID_STR
 from pynocular.db_util import create_new_database, create_table, drop_table
-from pynocular.engines import DatabaseType, DBEngine, DBInfo
+from pynocular.engines import DBEngine, DBInfo
 
 db_user_password = str(os.environ.get("DB_USER_PASSWORD"))
 # DB to initially connect to so we can create a new db
@@ -26,7 +26,7 @@ test_connection_string = str(
         f"postgresql://postgres:{db_user_password}@localhost:5432/{test_db_name}?sslmode=disable",
     )
 )
-testdb = DBInfo(DatabaseType.aiopg_engine, test_connection_string)
+testdb = DBInfo(test_connection_string)
 
 
 @database_model("organizations", testdb)

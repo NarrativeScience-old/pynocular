@@ -15,7 +15,7 @@ from pynocular.db_util import (
     create_table,
     drop_table,
 )
-from pynocular.engines import DatabaseType, DBEngine, DBInfo
+from pynocular.engines import DBEngine, DBInfo
 from pynocular.exceptions import NestedDatabaseModelNotResolved
 
 db_user_password = str(os.environ.get("DB_USER_PASSWORD"))
@@ -34,7 +34,7 @@ test_connection_string = str(
         f"postgresql://postgres:{db_user_password}@localhost:5432/{test_db_name}?sslmode=disable",
     )
 )
-testdb = DBInfo(DatabaseType.aiopg_engine, test_connection_string)
+testdb = DBInfo(test_connection_string)
 
 
 @database_model("users", testdb)
@@ -52,8 +52,12 @@ class Org(BaseModel):
     id: UUID_STR = Field(primary_key=True)
     name: str = Field(max_length=45)
     slug: str = Field(max_length=45)
-    tech_owner: Optional[nested_model(User, reference_field="tech_owner_id")]
-    business_owner: Optional[nested_model(User, reference_field="business_owner_id")]
+    tech_owner: Optional[
+        nested_model(User, reference_field="tech_owner_id")  # noqa F821
+    ]
+    business_owner: Optional[
+        nested_model(User, reference_field="business_owner_id")  # noqa F821
+    ]
 
     created_at: Optional[datetime] = Field(fetch_on_create=True)
     updated_at: Optional[datetime] = Field(fetch_on_update=True)
@@ -65,7 +69,7 @@ class App(BaseModel):
 
     id: Optional[UUID_STR] = Field(primary_key=True, fetch_on_create=True)
     name: str = Field(max_length=45)
-    org: nested_model(Org, reference_field="organization_id")
+    org: nested_model(Org, reference_field="organization_id")  # noqa F821
     slug: str = Field(max_length=45)
 
 
@@ -74,7 +78,7 @@ class Topic(BaseModel):
     """Model that represents the `topics` table"""
 
     id: UUID_STR = Field(primary_key=True)
-    app: nested_model(App, reference_field="app_id")
+    app: nested_model(App, reference_field="app_id")  # noqa F821
     name: str = Field(max_length=45)
 
 

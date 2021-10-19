@@ -6,12 +6,13 @@ from pydantic import BaseModel, Field
 import pytest
 
 from pynocular.database_model import database_model, nested_model, UUID_STR
-from pynocular.engines import DatabaseType, DBInfo
+from pynocular.engines import DBInfo
 from pynocular.patch_models import patch_database_model
 
 # With the `patch_database_model` we don't need a database connection
 test_connection_string = "fake connection string"
-testdb = DBInfo(DatabaseType.aiopg_engine, test_connection_string)
+testdb = DBInfo(test_connection_string)
+name = "boo"
 
 
 @database_model("users", testdb)
@@ -29,8 +30,12 @@ class Org(BaseModel):
     id: UUID_STR = Field(primary_key=True)
     name: str = Field(max_length=45)
     slug: str = Field(max_length=45)
-    tech_owner: Optional[nested_model(User, reference_field="tech_owner_id")]
-    business_owner: Optional[nested_model(User, reference_field="business_owner_id")]
+    tech_owner: Optional[
+        nested_model(User, reference_field="tech_owner_id")  # noqa F821
+    ]
+    business_owner: Optional[
+        nested_model(User, reference_field="business_owner_id")  # noqa F821
+    ]
 
 
 class TestPatchDatabaseModel:

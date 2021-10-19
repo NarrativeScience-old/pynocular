@@ -1,0 +1,22 @@
+description: Store test artifacts in CCI workflow run
+parameters:
+  artifacts_path:
+    description: The absolute path to the artifacts stored as an env var
+    type: string
+  artifacts_storage_dir:
+    description: The directory in /tmp where we want to store the artifacts
+    type: string
+    default: << parameters.artifacts_path >>
+  export_test_results:
+    description: Whether or not to upload the artifacts as Test Summary metadata
+    type: boolean
+    default: false
+steps:
+  - store_artifacts:
+      path: << parameters.artifacts_path >>
+      destination: << parameters.artifacts_storage_dir >>
+  - when:
+      condition: << parameters.export_test_results >>
+      steps:
+        - store_test_results:
+            path: << parameters.artifacts_path >>

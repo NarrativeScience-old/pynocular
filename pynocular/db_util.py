@@ -7,7 +7,7 @@ from aiopg.sa.connection import SAConnection
 import sqlalchemy as sa
 from sqlalchemy.sql.ddl import CreateTable
 
-from pynocular.engines import DatabaseType, DBEngine, DBInfo
+from pynocular.engines import DBEngine, DBInfo
 from pynocular.exceptions import InvalidSqlIdentifierErr
 
 logger = logging.getLogger()
@@ -43,7 +43,7 @@ async def create_new_database(connection_string: str, db_name: str) -> None:
         db_name: the name of the database to create
 
     """
-    existing_db = DBInfo(DatabaseType.aiopg_engine, connection_string)
+    existing_db = DBInfo(connection_string)
     conn = await (await DBEngine.get_engine(existing_db)).acquire()
     # End existing commit
     await conn.execute("commit")

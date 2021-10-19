@@ -1,4 +1,4 @@
-# pynocular
+# Pynocular
 
 [![](https://img.shields.io/pypi/v/pynocular.svg)](https://pypi.org/pypi/pynocular/) [![License](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](https://opensource.org/licenses/BSD-3-Clause)
 
@@ -27,7 +27,7 @@ Table of Contents:
 
 ## Installation
 
-pynocular requires Python 3.6 or above.
+Pynocular requires Python 3.6 or above.
 
 ```bash
 pip install pynocular
@@ -51,11 +51,15 @@ from pynocular.engines import DatabaseType, DBInfo
 # Example below shows how to connect to a locally-running Postgres database
 connection_string = f"postgresql://{db_user_name}:{db_user_password}@localhost:5432/{db_name}?sslmode=disable"
 )
-db_info = DBInfo(DatabaseType.aiopg_engine, connection_string)
+db_info = DBInfo(connection_string)
 ```
 
-Pynocular supports connecting to your database through two different asyncio engines; aiopg and asyncpgsa.
-You can pick which one you want to use by passing the correct `DatabaseType` enum value into `DBInfo`.
+Pynocular uses the asynchronous engine provided by aiopg to connect to your database. You can choose to use a
+different engine by providing a different engine_type value to `DBInfo`.
+```python
+db_info = DBInfo(connection_string, engine_type=DatabaseAlias.asyncpg_engine)
+```
+All other engine options are experimental and do not support all of the functionality Pynocular provides.
 
 #### Object Management
 
@@ -404,7 +408,7 @@ await create_table(db_info, Org._table)
 Pynocular comes with tooling to write unit tests against your DatabaseModels, giving you
 the ability to test your business logic without the extra work and latency involved in
 managing a database. All you have to do is use the `patch_database_model` context
-manager provided in pynocular.
+manager provided in Pynocular.
 
 ```python
 from pynocular.patch_models import patch_database_model
@@ -455,7 +459,19 @@ with patch_database_model(Org, models=orgs), patch_database_model(
 
 ## Development
 
-To develop pynocular, install dependencies and enable the pre-commit hook:
+To develop Pynocular, install dependencies and enable the pre-commit hook.
+
+The example below is using Python 3.9 but you can replace this with any supported version of Python.
+
+Install Python 3.9 and activate it in your shell.
+
+```bash
+sudo yum install libffi-devel # Needed for ctypes to install poetry
+pyenv install 3.9.7
+pyenv shell 3.9.7
+```
+
+Install dependencies and enable the pre-commit hook.
 
 ```bash
 pip install pre-commit poetry
@@ -463,7 +479,7 @@ poetry install
 pre-commit install
 ```
 
-To run tests:
+Run tests to confirm everything is installed correctly.
 
 ```bash
 poetry run pytest
