@@ -58,6 +58,14 @@ repos:
         types: [file, python]
         additional_dependencies: [black==21.9b0]
 
+      - id: mypy
+        name: Type check Python (mypy)
+        entry: mypy -p pynocular
+        language: python
+        types: [ file, python ]
+        additional_dependencies: [ mypy==0.910 ]
+        pass_filenames: false
+
       - id: pydocstyle
         name: Lint Python docstrings (pydocstyle)
         entry: pydocstyle
