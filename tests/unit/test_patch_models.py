@@ -105,3 +105,35 @@ class TestPatchDatabaseModel:
             org_get = await Org.get_with_refs(org.id)
             assert org_get.name == "new test name"
             assert org_get.tech_owner.username == "bberkley"
+
+    @pytest.mark.asyncio
+    async def test_patch_database_model_with_delete(self) -> None:
+        """Test that we can use `delete` on a patched db model"""
+        orgs = [
+            Org(id=str(uuid4()), name="orgus borgus", slug="orgus_borgus"),
+            Org(id=str(uuid4()), name="orgus borgus2", slug="orgus_borgus"),
+            Org(id=str(uuid4()), name="nonorgus borgus", slug="orgus_borgus"),
+        ]
+
+        with patch_database_model(Org, models=orgs):
+            orgs = await Org.get_list()
+            assert len(orgs) == 3
+            await orgs[0].delete()
+            orgs = await Org.get_list()
+            assert len(orgs) == 2
+
+    @pytest.mark.asyncio
+    async def test_patch_database_model_with_delete_records(self) -> None:
+        """Test that we can use `delete_records` on a patched db model"""
+        orgs = [
+            Org(id=str(uuid4()), name="orgus borgus", slug="orgus_borgus"),
+            Org(id=str(uuid4()), name="orgus borgus2", slug="orgus_borgus2"),
+            Org(id=str(uuid4()), name="nonorgus borgus", slug="nonorgus_borgus"),
+        ]
+
+        with patch_database_model(Org, models=orgs):
+            orgs = await Org.get_list()
+            assert len(orgs) == 3
+            await Org.delete_records(slug=["orgus_borgus2", "nonorgus_borgus"])
+            orgs = await Org.get_list()
+            assert len(orgs) == 1

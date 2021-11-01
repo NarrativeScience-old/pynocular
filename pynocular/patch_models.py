@@ -115,7 +115,7 @@ def patch_database_model(
                 this object gets saved.
 
         """
-        # If include_neted_models is True, call save on all nested model attributes.
+        # If include_nested_models is True, call save on all nested model attributes.
         # This requires that the nested models are also patched.
         if include_nested_models:
             for attr_name in model._nested_model_attributes:
@@ -131,7 +131,7 @@ def patch_database_model(
                 setattr(model, primary_key.name, str(uuid4()))
 
         # Pull the primary keys out of the class and the values out of the provided
-        # orm object. Then build a where_expression list to get the model matching those
+        # database model. Then build a where_expression list to get the model matching those
         # primary keys.
         where_expressions = [
             primary_key == getattr(model, primary_key.name)
@@ -156,7 +156,7 @@ def patch_database_model(
             for attr, val in model.dict().items():
                 setattr(matched_model, attr, val)
 
-    async def update_record(**kwargs: str) -> DatabaseModel:
+    async def update_record(**kwargs: Any) -> DatabaseModel:
         """Mock `update_record` function for DatabaseModel
 
         Args:
@@ -190,6 +190,52 @@ def patch_database_model(
             setattr(model, attr, val)
         return model
 
+    async def delete(model) -> None:
+        """Mock `delete` function for DatabaseModel"""
+        primary_keys = model_cls._primary_keys
+
+        # Pull the primary keys out of the class and the values out of the provided
+        # database model. Then build a where_expression list to get the model matching those
+        # primary keys.
+        where_expressions = [
+            primary_key == getattr(model, primary_key.name)
+            for primary_key in primary_keys
+        ]
+
+        # Remove any models that match the given where_expression
+        models[:] = [
+            model
+            for model in models
+            if not all(
+                _evaluate_column_element(expr, model.to_dict())
+                for expr in where_expressions
+            )
+        ]
+
+    async def delete_records(**kwargs: Any) -> None:
+        """Mock `delete_records` function for DatabaseModel
+
+        Args:
+            kwargs: The values used to find the records that should be deleted
+
+        """
+        where_exp = []
+        for key, value in kwargs.items():
+            col = getattr(model_cls.columns, key)
+            if isinstance(value, list):
+                where_exp.append(col.in_(value))
+            else:
+                where_exp.append(col == value)
+
+        # Remove any models that match the given where_expression
+        models[:] = [
+            model
+            for model in models
+            if not all(
+                _evaluate_column_element(expr, model.to_dict()) for expr in where_exp
+            )
+        ]
+
     # Add the patches. Note that create functionality is patched indirectly though
     # 'save' already, but add a spy on it anyway so we can test calls against it.
     with patch.object(model_cls, "select", select), patch.object(
@@ -198,6 +244,10 @@ def patch_database_model(
         model_cls, "create_list", create_list
     ), patch.object(
         model_cls, "create", wraps=model_cls.create
+    ), patch.object(
+        model_cls, "delete", delete
+    ), patch.object(
+        model_cls, "delete_records", delete_records
     ):
         yield
 
