@@ -116,11 +116,16 @@ class TestPatchDatabaseModel:
         ]
 
         with patch_database_model(Org, models=orgs):
-            orgs = await Org.get_list()
-            assert len(orgs) == 3
+            db_orgs = await Org.get_list()
+            assert len(db_orgs) == 3
             await orgs[0].delete()
-            orgs = await Org.get_list()
-            assert len(orgs) == 2
+            db_orgs = await Org.get_list()
+            assert len(db_orgs) == 2
+
+            # Confirm the correct orgs are left
+            sorted_orgs = sorted(orgs[1:3], key=lambda x: x.id)
+            sorted_db_orgs = sorted(db_orgs, key=lambda x: x.id)
+            assert sorted_orgs == sorted_db_orgs
 
     @pytest.mark.asyncio
     async def test_patch_database_model_with_delete_records(self) -> None:
@@ -132,8 +137,11 @@ class TestPatchDatabaseModel:
         ]
 
         with patch_database_model(Org, models=orgs):
-            orgs = await Org.get_list()
-            assert len(orgs) == 3
+            db_orgs = await Org.get_list()
+            assert len(db_orgs) == 3
             await Org.delete_records(slug=["orgus_borgus2", "nonorgus_borgus"])
-            orgs = await Org.get_list()
-            assert len(orgs) == 1
+            db_orgs = await Org.get_list()
+            assert len(db_orgs) == 1
+
+            # Confirm the correct org is left
+            assert orgs[0] == db_orgs[0]

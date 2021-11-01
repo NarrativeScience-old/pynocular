@@ -38,7 +38,7 @@ def patch_database_model(
         models: models that should be in the patched DB table.
 
     """
-    models = models or []
+    models = list(models) if models is not None else []
 
     def match(model: DatabaseModel, expression: BinaryExpression) -> bool:
         """Function to match the value with the expected one in the expression
