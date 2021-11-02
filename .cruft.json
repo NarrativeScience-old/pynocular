@@ -1,13 +1,17 @@
 {
   "template": "https://github.com/NarrativeScience/cookiecutter-python-lib",
-  "commit": "9e14f244710d27b6ddf3f6a88e107488b7d3208e",
+  "commit": "988b5b8439e2e149c4d3b1e32293b048bf975226",
   "context": {
     "cookiecutter": {
-      "package_name": "pynocular",
+      "author_name": "",
+      "author_email": "",
       "description": "Lightweight ORM that lets you query your database using Pydantic models and asyncio",
+      "repo_name": "",
+      "github_team": "@NarrativeScience/talos-tech-leads",
+      "package_title": "",
+      "package_name": "pynocular",
+      "python_version": "3.9",
       "visibility": "public",
-      "full_name": "Narrative Science",
-      "email": "contrib@narrativescience.com",
       "_template": "https://github.com/NarrativeScience/cookiecutter-python-lib"
     }
   },

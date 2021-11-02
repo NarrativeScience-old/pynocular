@@ -2,10 +2,10 @@ description: Restores the build-test cache for pyenv, poetry, and pre-commit
 steps:
   - restore_cache:
       keys:
-        - v2-pyenv-{{ arch }}-pynocular-{{ checksum "poetry.lock" }}
+        - v1-pyenv-{{ arch }}--{{ checksum "poetry.lock" }}
   - restore_cache:
       keys:
-        - v2-poetry-{{ arch }}-pynocular-{{ checksum "poetry.lock" }}
+        - v1-poetry-{{ arch }}--{{ checksum "poetry.lock" }}
   - restore_cache:
       keys:
-        - v2-precommit-{{ arch }}-pynocular-{{ checksum ".pre-commit-config.yaml" }}
+        - v1-precommit-{{ arch }}--{{ checksum ".pre-commit-config.yaml" }}
