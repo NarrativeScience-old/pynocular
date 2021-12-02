@@ -7,9 +7,7 @@ import aiocontextvars as contextvars
 from aiopg.sa.connection import SAConnection
 import aiopg.sa.engine
 
-transaction_connections_var = contextvars.ContextVar(
-    "transaction_connections", default={}
-)
+transaction_connections_var = contextvars.ContextVar("transaction_connections")
 
 
 def get_current_task() -> asyncio.Task:
@@ -78,7 +76,7 @@ class TaskContextConnection:
     def _get_connections(cls) -> Dict[str, LockedConnection]:
         """Get the map of connections from the task context"""
         global transaction_connections_var
-        return transaction_connections_var.get()
+        return transaction_connections_var.get({})
 
     def get(self) -> Optional[LockedConnection]:
         """If there is already a connection stored, get it"""
@@ -168,8 +166,11 @@ class transaction:
         # If we have started a transaction, store it here
         self._trx = None
 
-        # Initiatize an interface for managing the connection on the asyncio task context
-        self.task_connection = TaskContextConnection(str(engine))
+        # Initiatize an interface for managing the connection on the asyncio task context.
+        # Since we want one unique connection per process we are using the engine's dsn which
+        # is a string repr of the username, password(redacted), hostname, port and db name that
+        # the engine is connected to
+        self.task_connection = TaskContextConnection(engine.dsn)
 
     async def __aenter__(self) -> LockedConnection:
         """Establish the transaction context
@@ -189,8 +190,8 @@ class transaction:
             try:
                 self._trx = await conn.begin()
             except Exception:
-                await conn.close()
                 self.task_connection.clear()
+                await conn.close()
                 raise
         return conn
 
