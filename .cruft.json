@@ -1,6 +1,6 @@
 {
   "template": "https://github.com/NarrativeScience/cookiecutter-python-lib",
-  "commit": "988b5b8439e2e149c4d3b1e32293b048bf975226",
+  "commit": "f31f5912ab949296517c6d65fc666b11926a5cf8",
   "context": {
     "cookiecutter": {
       "author_name": "",

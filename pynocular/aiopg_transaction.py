@@ -7,9 +7,7 @@ import aiocontextvars as contextvars
 from aiopg.sa.connection import SAConnection
 import aiopg.sa.engine
 
-transaction_connections_var = contextvars.ContextVar(
-    "transaction_connections", default={}
-)
+transaction_connections_var = contextvars.ContextVar("transaction_connections")
 
 
 def get_current_task() -> asyncio.Task:
@@ -78,7 +76,7 @@ class TaskContextConnection:
     def _get_connections(cls) -> Dict[str, LockedConnection]:
         """Get the map of connections from the task context"""
         global transaction_connections_var
-        return transaction_connections_var.get()
+        return transaction_connections_var.get({})
 
     def get(self) -> Optional[LockedConnection]:
         """If there is already a connection stored, get it"""
@@ -189,8 +187,8 @@ class transaction:
             try:
                 self._trx = await conn.begin()
             except Exception:
-                await conn.close()
                 self.task_connection.clear()
+                await conn.close()
                 raise
         return conn
 

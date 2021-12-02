@@ -71,7 +71,7 @@ class TestDatabaseTransactions:
         loop.run_until_complete(cls._teardown_class())
 
     @pytest.mark.asyncio
-    async def test_gathered_updates(self) -> None:
+    async def test_gathered_creates(self) -> None:
         """Test that we can update the db multiple times in a gather under a single transaction"""
         try:
             async with await DBEngine.transaction(testdb, is_conditional=False):
