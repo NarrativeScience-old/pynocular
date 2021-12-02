@@ -166,11 +166,8 @@ class transaction:
         # If we have started a transaction, store it here
         self._trx = None
 
-        # Initiatize an interface for managing the connection on the asyncio task context.
-        # Since we want one unique connection per process we are using the engine's dsn which
-        # is a string repr of the username, password(redacted), hostname, port and db name that
-        # the engine is connected to
-        self.task_connection = TaskContextConnection(engine.dsn)
+        # Initiatize an interface for managing the connection on the asyncio task context
+        self.task_connection = TaskContextConnection(str(engine))
 
     async def __aenter__(self) -> LockedConnection:
         """Establish the transaction context
