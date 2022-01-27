@@ -7,8 +7,10 @@ from uuid import uuid4
 
 from sqlalchemy import Column
 from sqlalchemy.sql.elements import (
+    AsBoolean,
     BinaryExpression,
     BindParameter,
+    BooleanClauseList,
     ClauseList,
     ColumnElement,
     False_,
@@ -17,7 +19,7 @@ from sqlalchemy.sql.elements import (
     True_,
     UnaryExpression,
 )
-from sqlalchemy.sql.operators import in_op, is_
+from sqlalchemy.sql.operators import in_op, is_, is_false, is_not
 
 from pynocular.database_model import DatabaseModel
 
@@ -190,6 +192,27 @@ def patch_database_model(
             setattr(model, attr, val)
         return model
 
+    async def update(
+        where_expressions: Optional[List[BinaryExpression]], values: Dict[str, Any]
+    ) -> List[DatabaseModel]:
+        """Mock `update_record` function for DatabaseModel
+
+        Args:
+            where_expressions: A list of BinaryExpressions for the table that will be
+                `and`ed together for the where clause of the UPDATE
+            values: The field and values to update all records to that match the
+                where_expressions
+
+        Returns:
+            The updated DatabaseModels.
+
+        """
+        models = await select(where_expressions)
+        for model in models:
+            for attr, val in values.items():
+                setattr(model, attr, val)
+        return models
+
     async def delete(model) -> None:
         """Mock `delete` function for DatabaseModel"""
         primary_keys = model_cls._primary_keys
@@ -241,6 +264,8 @@ def patch_database_model(
     with patch.object(model_cls, "select", select), patch.object(
         model_cls, "save", save
     ), patch.object(model_cls, "update_record", update_record), patch.object(
+        model_cls, "update", update
+    ), patch.object(
         model_cls, "create_list", create_list
     ), patch.object(
         model_cls, "create", wraps=model_cls.create
@@ -269,6 +294,31 @@ def _evaluate_column_element(
 
     """
     raise Exception(f"Cannot evaluate a {column_element} object.")
+
+
+@_evaluate_column_element.register(BooleanClauseList)
+def _evaluate_boolean_clause_list(
+    column_element: ClauseList, model: Dict[str, Any]
+) -> Any:
+    """Evaluates a boolean clause list and breaks it down into its sub column elements
+
+    Args:
+        column_element: The BooleanClauseList in question.
+        model: The model of data this clause should be evaluated for.
+
+    Returns:
+        The result of the evaluation.
+
+    """
+    operator = column_element.operator
+
+    return functools.reduce(
+        operator,
+        [
+            _evaluate_column_element(sub_element, model)
+            for sub_element in column_element.get_children()
+        ],
+    )
 
 
 @_evaluate_column_element.register(ClauseList)
@@ -319,10 +369,33 @@ def _evaluate_binary_expression(
     if operator == is_:
         operator = lambda x, y: x is y
 
+    # The sqlalchemy `is_not` operator does not work on evaluated columns, so we replace
+    # it with the standard `!=` operator.
+    if operator == is_not:
+        operator = lambda x, y: x != y
+
     return operator(
         _evaluate_column_element(column_element.left, model),
         _evaluate_column_element(column_element.right, model),
     )
+
+
+@_evaluate_column_element.register(AsBoolean)
+def _evaluate_as_boolean(column_element: AsBoolean, model: Dict[str, Any]) -> Any:
+    """Evaluates a boolean
+
+    Args:
+        column_element: The boolean to evaluate.
+        model: The model to evaluate the expression on.
+
+    Returns:
+        The evaluation response dictated by the operator of the expression.
+
+    """
+    result = bool(_evaluate_column_element(column_element.element, model))
+    if column_element.operator == is_false:
+        return not result
+    return result
 
 
 @_evaluate_column_element.register(Column)

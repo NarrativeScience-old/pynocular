@@ -4,10 +4,11 @@ from uuid import uuid4
 
 from pydantic import BaseModel, Field
 import pytest
+from sqlalchemy import or_
 
 from pynocular.database_model import database_model, nested_model, UUID_STR
 from pynocular.engines import DBInfo
-from pynocular.patch_models import patch_database_model
+from pynocular.patch_models import _evaluate_column_element, patch_database_model
 
 # With the `patch_database_model` we don't need a database connection
 test_connection_string = "fake connection string"
@@ -36,6 +37,9 @@ class Org(BaseModel):
     business_owner: Optional[
         nested_model(User, reference_field="business_owner_id")  # noqa F821
     ]
+    flag1: bool = Field(default=True)
+    flag2: bool = Field(default=True)
+    flag3: bool = Field(default=True)
 
 
 class TestPatchDatabaseModel:
@@ -145,3 +149,41 @@ class TestPatchDatabaseModel:
 
             # Confirm the correct org is left
             assert orgs[0] == db_orgs[0]
+
+    @pytest.mark.asyncio
+    async def test_patch_database_model_with_update(self) -> None:
+        """Test that we can use `update` to update multiple models"""
+        orgs = [
+            Org(id=str(uuid4()), name="orgus borgus", slug="orgus_borgus"),
+            Org(id=str(uuid4()), name="orgus borgus", slug="orgus_borgus"),
+            Org(id=str(uuid4()), name="nonorgus borgus", slug="nonorgus_borgus"),
+        ]
+
+        with patch_database_model(Org, models=orgs):
+            db_orgs = await Org.get_list()
+            assert len(db_orgs) == 3
+            updated = await Org.update(
+                [Org.columns.name == "orgus borgus"],
+                values={"name": "foo", "slug": "bar"},
+            )
+            assert {org.id for org in updated} == {org.id for org in orgs[:2]}
+            assert all(org.name == "foo" and org.slug == "bar" for org in updated)
+
+
+class TestEvaluateColumnElement:
+    """Test class for the _evaluate_column_element function"""
+
+    def test_evaluate_column_element__neq(self) -> None:
+        """Should handle the is_not operator"""
+        assert not _evaluate_column_element(Org.columns.name != "foo", {"name": "foo"})
+
+    def test_evaluate_column_element__n_ary_or(self) -> None:
+        """Should handle an OR with multiple arguments"""
+        assert _evaluate_column_element(
+            or_(Org.columns.flag1, Org.columns.flag2, Org.columns.flag3),
+            {"flag1": False, "flag2": False, "flag3": True},
+        )
+
+    def test_evaluate_column_element__not(self) -> None:
+        """Should handle a NOT operator"""
+        assert not _evaluate_column_element(~Org.columns.flag1, {"flag1": True})
