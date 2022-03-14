@@ -14,6 +14,7 @@ from typing import (
     Sequence,
     Set,
     Type,
+    TYPE_CHECKING,
     TypeVar,
     Union,
 )
@@ -162,8 +163,13 @@ def database_model(table_name: str, database_info: DBInfo) -> Callable[[T], T]:
 
 SelfType = TypeVar("SelfType", bound="DatabaseModel")
 
+if TYPE_CHECKING:
+    _pydantic_base_model = BaseModel
+else:
+    _pydantic_base_model = object
 
-class DatabaseModel(BaseModel):
+
+class DatabaseModel(_pydantic_base_model):
     """Adds database functionality to a Pydantic BaseModel
 
     A DatabaseModel is a Pydantic based model along with a SQLAlchemy
