@@ -93,9 +93,12 @@ class UUID_STR(str):
             raise ValueError("invalid UUID string")
 
 
+SelfType = TypeVar("SelfType", bound="DatabaseModel")
+
+
 def nested_model(
-    db_model_class: Type["DatabaseModel"], reference_field: str = None
-) -> Callable:
+    db_model_class: Type[SelfType], reference_field: str = None
+) -> Type[SelfType]:
     """Generate a NestedModel class with dynamic model references
 
     Args:
@@ -127,7 +130,7 @@ def nested_model(
                 v = cast("DatabaseModel", v)
                 return NestedDatabaseModel(db_model_class, v.get_primary_id(), v)
 
-    return NestedModel
+    return NestedModel  # type: ignore
 
 
 T = TypeVar("T", bound=Type[BaseModel])
@@ -160,8 +163,6 @@ def database_model(table_name: str, database_info: DBInfo) -> Callable[[T], T]:
 
     return wrapped
 
-
-SelfType = TypeVar("SelfType", bound="DatabaseModel")
 
 if TYPE_CHECKING:
     _pydantic_base_model = BaseModel
@@ -448,7 +449,7 @@ class DatabaseModel(_pydantic_base_model):
             return [cls.from_dict(dict(record)) for record in records]
 
     @classmethod
-    async def create(cls: Type[SelfType], **data: Dict[str, Any]) -> SelfType:
+    async def create(cls: Type[SelfType], **data: Any) -> SelfType:
         """Create a new instance of the this DatabaseModel and save it
 
         Args:
@@ -779,3 +780,18 @@ class DatabaseModel(_pydantic_base_model):
                 _dict[prop_name] = prop_value
 
         return _dict
+
+
+# Used for clients to import BaseModel from here and allow mypy to understand
+# that both BaseModel and DatabaseModel functions are valid for subclasses with
+# the database_model decorator applied
+if TYPE_CHECKING:
+
+    class BaseModel_database_model_hint(DatabaseModel, BaseModel):
+        """Dummy class to keep mypy happy"""
+
+        pass
+
+
+else:
+    BaseModel_database_model_hint = BaseModel
