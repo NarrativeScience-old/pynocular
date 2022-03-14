@@ -479,9 +479,9 @@ identical at runtime to the Pydantic one, but with extra type information. For
 convenience, the unmodified `BaseModel` class is also available to be imported
 from the same place.
 
-Warning: if you use `BaseModel_database_model_hint` without the
-`database_model` decorator, mypy will incorrectly believe the model will have
-the pynocular provided functionality.
+Warning: if you use `BaseModel_database_model_hint` to create a Pydantic model
+without the `database_model` decorator, mypy will incorrectly believe the model
+will have the pynocular provided functionality.
 
 e.g.
 
