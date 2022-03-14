@@ -1,7 +1,7 @@
 """Context manager for mocking db calls for DatabaseModels during tests"""
 from contextlib import contextmanager
 import functools
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Generator, List, Optional, Type, TypeVar
 from unittest.mock import patch
 from uuid import uuid4
 
@@ -23,12 +23,14 @@ from sqlalchemy.sql.operators import in_op, is_, is_false, is_not
 
 from pynocular.database_model import DatabaseModel
 
+SelfType = TypeVar("SelfType", bound=DatabaseModel)
+
 
 @contextmanager
 def patch_database_model(
-    model_cls: DatabaseModel,
-    models: Optional[List[DatabaseModel]] = None,
-) -> None:
+    model_cls: Type[SelfType],
+    models: Optional[List[SelfType]] = None,
+) -> Generator:
     """Patch a DatabaseModel class, seeding with a set of values
 
     Example:
@@ -61,7 +63,7 @@ def patch_database_model(
         where_expressions: Optional[List[BinaryExpression]] = None,
         order_by: Optional[List[UnaryExpression]] = None,
         limit: Optional[int] = None,
-    ) -> List[DatabaseModel]:
+    ) -> List[SelfType]:
         """Mock select function for DatabaseModel
 
         Args:
@@ -92,7 +94,7 @@ def patch_database_model(
 
         return matched_models
 
-    async def create_list(models) -> List[DatabaseModel]:
+    async def create_list(models: List[SelfType]) -> List[SelfType]:
         """Mock `create_list` function for DatabaseModel
 
         Args:
@@ -108,7 +110,7 @@ def patch_database_model(
 
         return models
 
-    async def save(model, include_nested_models=False) -> None:
+    async def save(model: SelfType, include_nested_models: bool = False) -> None:
         """Mock `save` function for DatabaseModel
 
         Args:
@@ -158,7 +160,7 @@ def patch_database_model(
             for attr, val in model.dict().items():
                 setattr(matched_model, attr, val)
 
-    async def update_record(**kwargs: Any) -> DatabaseModel:
+    async def update_record(**kwargs: Any) -> SelfType:
         """Mock `update_record` function for DatabaseModel
 
         Args:
@@ -194,7 +196,7 @@ def patch_database_model(
 
     async def update(
         where_expressions: Optional[List[BinaryExpression]], values: Dict[str, Any]
-    ) -> List[DatabaseModel]:
+    ) -> List[SelfType]:
         """Mock `update_record` function for DatabaseModel
 
         Args:
@@ -213,7 +215,7 @@ def patch_database_model(
                 setattr(model, attr, val)
         return models
 
-    async def delete(model) -> None:
+    async def delete(model: SelfType) -> None:
         """Mock `delete` function for DatabaseModel"""
         primary_keys = model_cls._primary_keys
 
