@@ -452,10 +452,10 @@ with patch_database_model(Org, models=orgs), patch_database_model(
 
 ### Type checking and mypy support
 
-Pynocular supports mypy in a limited way. Using mypy with the Pydantic mypy
-plugin will provide type checking for Pynocular database models' usual pydantic
-fields, but by default mypy will not know about the DatabaseModel specific
-methods.
+Pynocular is fully type hinted and supports mypy in a limited way. Using mypy
+with the Pydantic mypy plugin will provide type checking for Pynocular database
+models' usual pydantic fields, but by default mypy will not know about the
+DatabaseModel specific methods.
 
 e.g.
 ```python
