@@ -6,7 +6,12 @@ from pydantic import BaseModel, Field
 import pytest
 from sqlalchemy import or_
 
-from pynocular.database_model import database_model, nested_model, UUID_STR
+from pynocular.database_model import (
+    database_model,
+    DatabaseModel,
+    nested_model,
+    UUID_STR,
+)
 from pynocular.engines import DBInfo
 from pynocular.patch_models import _evaluate_column_element, patch_database_model
 
@@ -16,8 +21,7 @@ testdb = DBInfo(test_connection_string)
 name = "boo"
 
 
-@database_model("users", testdb)
-class User(BaseModel):
+class User(DatabaseModel, table_name="users", database_info=testdb):
     """Model that represents the `users` table"""
 
     id: UUID_STR = Field(primary_key=True)

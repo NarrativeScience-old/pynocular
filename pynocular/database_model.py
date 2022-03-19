@@ -1,5 +1,6 @@
 """Base Model class that implements CRUD methods for database entities based on Pydantic dataclasses"""
 import asyncio
+import copy
 from datetime import datetime
 from enum import Enum, EnumMeta
 import inspect
@@ -22,6 +23,7 @@ from uuid import UUID as stdlib_uuid
 
 from aenum import Enum as AEnum, EnumMeta as AEnumMeta
 from pydantic import BaseModel, PositiveFloat, PositiveInt
+from pydantic.main import ModelMetaclass
 from pydantic.types import UUID4
 from sqlalchemy import (
     and_,
@@ -93,12 +95,19 @@ class UUID_STR(str):
             raise ValueError("invalid UUID string")
 
 
-SelfType = TypeVar("SelfType", bound="DatabaseModel")
+# DatabaseModel methods often return objects of their own type
+# i.e. await SomeModel.get_list(...) returns type list[SomeModel], not
+# list[DatabaseModel], so we use a generic to capture that
+SelfType = TypeVar("SelfType", bound="_DatabaseModel")
+
+
+# nested_model has a similar thing, but uses the public-facing DatabaseModel
+PublicSelfType = TypeVar("PublicSelfType", bound="DatabaseModel")
 
 
 def nested_model(
-    db_model_class: Type[SelfType], reference_field: str = None
-) -> Type[SelfType]:
+    db_model_class: Type[PublicSelfType], reference_field: str = None
+) -> Type[PublicSelfType]:
     """Generate a NestedModel class with dynamic model references
 
     Args:
@@ -156,7 +165,7 @@ def database_model(table_name: str, database_info: DBInfo) -> Callable[[T], T]:
                 "Model is not subclass of pydantic.BaseModel"
             )
 
-        cls.__bases__ += (DatabaseModel,)
+        cls.__bases__ += (_DatabaseModel,)
         cls.initialize_table(table_name, database_info)  # type: ignore
 
         return cls
@@ -164,13 +173,19 @@ def database_model(table_name: str, database_info: DBInfo) -> Callable[[T], T]:
     return wrapped
 
 
+# Tell mypy that _DatabaseModle subclasses BaseModel so it knows that using
+# BaseModel's attributes is acceptable in _DatabaseModel methods
+# in practice, all subclasses will subclass BaseModel
 if TYPE_CHECKING:
     _pydantic_base_model = BaseModel
 else:
+    # At runtime, we can't subclass BaseModel directly because the metaclass
+    # would treat all DatabaseModel attributes as pydantic fields, for e.g.
+    # validation
     _pydantic_base_model = object
 
 
-class DatabaseModel(_pydantic_base_model):
+class _DatabaseModel(_pydantic_base_model):
     """Adds database functionality to a Pydantic BaseModel
 
     A DatabaseModel is a Pydantic based model along with a SQLAlchemy
@@ -208,6 +223,23 @@ class DatabaseModel(_pydantic_base_model):
 
     # This can be used to access the table when defining where expressions
     columns: ImmutableColumnCollection = None
+
+    def __init_subclass__(
+        cls, table_name: str = None, database_info: DBInfo = None, **kwargs: Any
+    ) -> None:
+        """When a new DB model is created, initialize the table
+
+        Args:
+            table_name: The name of the table associated with this model
+            database_info: The database information associated with this model
+
+        """
+        super().__init_subclass__(**kwargs)
+        if _DatabaseModel not in inspect.getmro(cls):
+            # Assume we're using the class decorator if we subclass BaseModel
+            return
+
+        cls.initialize_table(table_name, database_info)
 
     @classmethod
     def initialize_table(cls, table_name: str, database_info: DBInfo) -> None:
@@ -309,7 +341,7 @@ class DatabaseModel(_pydantic_base_model):
         cls.columns = cls._table.c
 
     @classmethod
-    async def get_with_refs(cls, *args: Any, **kwargs: Any) -> "DatabaseModel":
+    async def get_with_refs(cls, *args: Any, **kwargs: Any) -> "_DatabaseModel":
         """Gets the DatabaseModel associated with any nested key references resolved
 
         Args:
@@ -782,16 +814,26 @@ class DatabaseModel(_pydantic_base_model):
         return _dict
 
 
-# Used for clients to import BaseModel from here and allow mypy to understand
-# that both BaseModel and DatabaseModel functions are valid for subclasses with
-# the database_model decorator applied
-if TYPE_CHECKING:
-
-    class BaseModel_database_model_hint(DatabaseModel, BaseModel):
-        """Dummy class to keep mypy happy"""
-
-        pass
+# Create public class to use to create type checkable DatabaseModels
+class DatabaseModel(_DatabaseModel, BaseModel):
+    pass
 
 
-else:
-    BaseModel_database_model_hint = BaseModel
+class MyModel(
+    DatabaseModel, table_name="my_table", database_info=DBInfo("type", (("a", "b"),))
+):
+    field: str = ""
+    other: int = 0
+
+class NestedModel(DatabaseModel, table_name = "table2", database_info=DBInfo("type")):
+    nest: nested_model(MyModel, reference_field="nest") # type: ignore
+
+async def model() -> None:
+    m_list = await MyModel.get_list()
+    m = m_list[0]
+    await m.save()
+    print(m.field)
+    print(m.bad_field)  # Mypy error!
+    nest_list = await NestedModel.get_list()
+    n = nest_list[0]
+    reveal_type(n.nest) # Any, since we used type: ignore for definition
