@@ -450,6 +450,82 @@ with patch_database_model(Org, models=orgs), patch_database_model(
     assert org_get.tech_owner.username == "bberkley"
 ```
 
+### Type checking and mypy support
+
+Pynocular is fully type hinted and supports mypy in a limited way. Using mypy
+with the Pydantic mypy plugin will provide type checking for Pynocular database
+models' usual pydantic fields, but by default mypy will not know about the
+DatabaseModel specific methods.
+
+e.g.
+```python
+from pynocular.database_model import database_model
+from pydantic import BaseModel
+
+@database_model(...)
+class MyModel(BaseModel):
+  my_field: str = ...
+
+model = MyModel(...) # mypy understands this type
+print(model.my_field) # mypy will not error on this
+print(model.non_existent_field) # mypy will error here
+model_list = await MyModel.get_list(...) # mypy will (incorrectly) error here
+```
+
+The false positives are due to a limitation of python's type hint system that
+doesn't allow for dynamic class modification. The current workaround is to use
+the `BaseModel_database_model_hint` class provided by Pynocular, which is
+identical at runtime to the Pydantic one, but with extra type information. For
+convenience, the unmodified `BaseModel` class is also available to be imported
+from the same place.
+
+Warning: if you use `BaseModel_database_model_hint` to create a Pydantic model
+without the `database_model` decorator, mypy will incorrectly believe the model
+will have the pynocular provided functionality.
+
+e.g.
+
+```python
+from pynocular.database_model import database_model, BaseModel, BaseModel_database_model_hint
+
+@database_model(...)
+class MyModel_(BaseModel_database_model_hint):
+  my_field: str = ...
+
+model = MyModel(...) # mypy understands this type
+print(model.my_field) # mypy will not error on this
+print(model.non_existent_field) # mypy will error here
+model_list = await MyModel.get_list(...) # mypy will not error anymore
+print(model_list[0].non_existent_field) # mypy knows the type of model_list is
+                                        # List[MyModel], so catches the missing attribute
+model_list[0].my_field = "foo" # mypy doesn't error
+await model_list[0].save(some_bad_arg) # mypy errors on the incorrect call to save
+
+class MyNonDbModel(BaseModel):
+  my_other_field: str = ...
+
+other_list = await MyNonDbModel.create_list() # Mypy correctly errors on
+                                              # attempted use of pynocular provided method
+
+```
+
+In the future, this functionality may be rolled into a mypy plugin to avoid
+requiring the separate `BaseModel` imports.
+
+#### Nested Models
+
+Currently, Pynocular doesn't support nested models with mypy. As a workaround,
+you can append `# type: ignore` to lines using `nested_model` as a type
+annotation:
+
+```python
+
+class MyModel(BaseModel):
+  nested_db_field: nested_model(...) = ... # type: ignore
+
+```
+
+
 ## Development
 
 To develop Pynocular, install dependencies and enable the pre-commit hook.

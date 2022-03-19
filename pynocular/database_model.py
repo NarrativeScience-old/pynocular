@@ -1,13 +1,29 @@
 """Base Model class that implements CRUD methods for database entities based on Pydantic dataclasses"""
 import asyncio
+import copy
 from datetime import datetime
 from enum import Enum, EnumMeta
 import inspect
-from typing import Any, Callable, Dict, Generator, List, Optional, Sequence, Set, Union
+from typing import (
+    Any,
+    Callable,
+    cast,
+    Dict,
+    Generator,
+    List,
+    Optional,
+    Sequence,
+    Set,
+    Type,
+    TYPE_CHECKING,
+    TypeVar,
+    Union,
+)
 from uuid import UUID as stdlib_uuid
 
 from aenum import Enum as AEnum, EnumMeta as AEnumMeta
 from pydantic import BaseModel, PositiveFloat, PositiveInt
+from pydantic.main import ModelMetaclass
 from pydantic.types import UUID4
 from sqlalchemy import (
     and_,
@@ -25,6 +41,7 @@ from sqlalchemy.dialects.postgresql import insert, JSONB, UUID as sqlalchemy_uui
 from sqlalchemy.schema import FetchedValue
 from sqlalchemy.sql.base import ImmutableColumnCollection
 from sqlalchemy.sql.elements import BinaryExpression, UnaryExpression
+from typing_extensions import TypeGuard
 
 from pynocular.engines import DBEngine, DBInfo
 from pynocular.exceptions import (
@@ -39,18 +56,18 @@ from pynocular.exceptions import (
 from pynocular.nested_database_model import NestedDatabaseModel
 
 
-def is_valid_uuid(string: str) -> bool:
-    """Check if a string is a valid UUID
+def is_valid_uuid(obj: Any) -> TypeGuard["UUID_STR"]:
+    """Check if an object  is a valid UUID
 
     Args:
-        string: the string to check
+        obj: the object to check
 
     Returns:
         Whether or not the string is a well-formed UUIDv4
 
     """
     try:
-        stdlib_uuid(string, version=4)
+        stdlib_uuid(obj, version=4)
         return True
     except (TypeError, AttributeError, ValueError):
         return False
@@ -72,15 +89,25 @@ class UUID_STR(str):
             v: The value to validate
 
         """
-        if isinstance(v, stdlib_uuid) or (isinstance(v, str) and is_valid_uuid(v)):
+        if isinstance(v, stdlib_uuid) or is_valid_uuid(v):
             return str(v)
         else:
             raise ValueError("invalid UUID string")
 
 
+# DatabaseModel methods often return objects of their own type
+# i.e. await SomeModel.get_list(...) returns type list[SomeModel], not
+# list[DatabaseModel], so we use a generic to capture that
+SelfType = TypeVar("SelfType", bound="_DatabaseModel")
+
+
+# nested_model has a similar thing, but uses the public-facing DatabaseModel
+PublicSelfType = TypeVar("PublicSelfType", bound="DatabaseModel")
+
+
 def nested_model(
-    db_model_class: "DatabaseModel", reference_field: str = None
-) -> Callable:
+    db_model_class: Type[PublicSelfType], reference_field: str = None
+) -> Type[PublicSelfType]:
     """Generate a NestedModel class with dynamic model references
 
     Args:
@@ -109,12 +136,16 @@ def nested_model(
             if is_valid_uuid(v):
                 return NestedDatabaseModel(db_model_class, v)
             else:
+                v = cast("DatabaseModel", v)
                 return NestedDatabaseModel(db_model_class, v.get_primary_id(), v)
 
-    return NestedModel
+    return NestedModel  # type: ignore
 
 
-def database_model(table_name: str, database_info: DBInfo) -> "DatabaseModel":
+T = TypeVar("T", bound=Type[BaseModel])
+
+
+def database_model(table_name: str, database_info: DBInfo) -> Callable[[T], T]:
     """Decorator that adds SQL functionality to Pydantic BaseModel objects
 
     Args:
@@ -128,21 +159,33 @@ def database_model(table_name: str, database_info: DBInfo) -> "DatabaseModel":
 
     """
 
-    def wrapped(cls):
+    def wrapped(cls: T) -> T:
         if BaseModel not in inspect.getmro(cls):
             raise DatabaseModelMisconfigured(
                 "Model is not subclass of pydantic.BaseModel"
             )
 
-        cls.__bases__ += (DatabaseModel,)
-        cls.initialize_table(table_name, database_info)
+        cls.__bases__ += (_DatabaseModel,)
+        cls.initialize_table(table_name, database_info)  # type: ignore
 
         return cls
 
     return wrapped
 
 
-class DatabaseModel:
+# Tell mypy that _DatabaseModle subclasses BaseModel so it knows that using
+# BaseModel's attributes is acceptable in _DatabaseModel methods
+# in practice, all subclasses will subclass BaseModel
+if TYPE_CHECKING:
+    _pydantic_base_model = BaseModel
+else:
+    # At runtime, we can't subclass BaseModel directly because the metaclass
+    # would treat all DatabaseModel attributes as pydantic fields, for e.g.
+    # validation
+    _pydantic_base_model = object
+
+
+class _DatabaseModel(_pydantic_base_model):
     """Adds database functionality to a Pydantic BaseModel
 
     A DatabaseModel is a Pydantic based model along with a SQLAlchemy
@@ -180,6 +223,23 @@ class DatabaseModel:
 
     # This can be used to access the table when defining where expressions
     columns: ImmutableColumnCollection = None
+
+    def __init_subclass__(
+        cls, table_name: str = None, database_info: DBInfo = None, **kwargs: Any
+    ) -> None:
+        """When a new DB model is created, initialize the table
+
+        Args:
+            table_name: The name of the table associated with this model
+            database_info: The database information associated with this model
+
+        """
+        super().__init_subclass__(**kwargs)
+        if _DatabaseModel not in inspect.getmro(cls):
+            # Assume we're using the class decorator if we subclass BaseModel
+            return
+
+        cls.initialize_table(table_name, database_info)
 
     @classmethod
     def initialize_table(cls, table_name: str, database_info: DBInfo) -> None:
@@ -281,7 +341,7 @@ class DatabaseModel:
         cls.columns = cls._table.c
 
     @classmethod
-    async def get_with_refs(cls, *args: Any, **kwargs: Any) -> "DatabaseModel":
+    async def get_with_refs(cls, *args: Any, **kwargs: Any) -> "_DatabaseModel":
         """Gets the DatabaseModel associated with any nested key references resolved
 
         Args:
@@ -302,7 +362,7 @@ class DatabaseModel:
         return obj
 
     @classmethod
-    async def get(cls, *args: Any, **kwargs: Any) -> "DatabaseModel":
+    async def get(cls: Type[SelfType], *args: Any, **kwargs: Any) -> SelfType:
         """Gets the DatabaseModel for the given primary key value(s)
 
         Args:
@@ -344,7 +404,7 @@ class DatabaseModel:
         return records[0]
 
     @classmethod
-    async def get_list(cls, **kwargs: Any) -> List["DatabaseModel"]:
+    async def get_list(cls: Type[SelfType], **kwargs: Any) -> List[SelfType]:
         """Fetches the DatabaseModel for based on the provided kwargs
 
         Args:
@@ -380,11 +440,11 @@ class DatabaseModel:
 
     @classmethod
     async def select(
-        cls,
+        cls: Type[SelfType],
         where_expressions: Optional[List[BinaryExpression]] = None,
         order_by: Optional[List[UnaryExpression]] = None,
         limit: Optional[int] = None,
-    ) -> List["DatabaseModel"]:
+    ) -> List[SelfType]:
         """Execute a SELECT on the DatabaseModel table with the given parameters
 
         Args:
@@ -421,7 +481,7 @@ class DatabaseModel:
             return [cls.from_dict(dict(record)) for record in records]
 
     @classmethod
-    async def create(cls, **data) -> "DatabaseModel":
+    async def create(cls: Type[SelfType], **data: Any) -> SelfType:
         """Create a new instance of the this DatabaseModel and save it
 
         Args:
@@ -437,7 +497,9 @@ class DatabaseModel:
         return new
 
     @classmethod
-    async def create_list(cls, models: List["DatabaseModel"]) -> List["DatabaseModel"]:
+    async def create_list(
+        cls: Type[SelfType], models: List[SelfType]
+    ) -> List[SelfType]:
         """Create new batch of records in one query
 
         This will mutate the provided models to include db managed column values.
@@ -518,7 +580,7 @@ class DatabaseModel:
                 raise InvalidFieldValue(message=e.diag.message_primary)
 
     @classmethod
-    async def update_record(cls, **kwargs: Any) -> "DatabaseModel":
+    async def update_record(cls: Type[SelfType], **kwargs: Any) -> SelfType:
         """Update a record associated with this DatabaseModel
 
         Notes:
@@ -550,8 +612,10 @@ class DatabaseModel:
 
     @classmethod
     async def update(
-        cls, where_expressions: Optional[List[BinaryExpression]], values: Dict[str, Any]
-    ) -> List["DatabaseModel"]:
+        cls: Type[SelfType],
+        where_expressions: Optional[List[BinaryExpression]],
+        values: Dict[str, Any],
+    ) -> List[SelfType]:
         """Execute an UPDATE on a DatabaseModel table with the given parameters
 
         Args:
@@ -584,7 +648,7 @@ class DatabaseModel:
 
             return [cls.from_dict(dict(record)) for record in await results.fetchall()]
 
-    async def save(self, include_nested_models=False) -> None:
+    async def save(self, include_nested_models: bool = False) -> None:
         """Update the database record this object represents with its current state
 
         Args:
@@ -685,7 +749,7 @@ class DatabaseModel:
                 raise InvalidFieldValue(message=e.diag.message_primary)
 
     @classmethod
-    def from_dict(cls, _dict: Dict[str, Any]) -> "DatabaseModel":
+    def from_dict(cls: Type[SelfType], _dict: Dict[str, Any]) -> SelfType:
         """Instantiate a DatabaseModel object from a dict record
 
         Note:
@@ -748,3 +812,36 @@ class DatabaseModel:
                 _dict[prop_name] = prop_value
 
         return _dict
+
+
+# Create public class to use to create type checkable DatabaseModels
+class DatabaseModel(_DatabaseModel, BaseModel):
+    pass
+
+
+#-------------- Prototype code to mess around with ----------------
+
+class MyModel(
+    DatabaseModel, table_name="my_table", database_info=DBInfo("type", (("a", "b"),))
+):
+    field: str = ""
+    other: int = 0
+
+class NestedModel(DatabaseModel, table_name = "table2", database_info=DBInfo("type")):
+    if TYPE_CHECKING:
+        nest: MyModel
+    else:
+        nest: nested_model(MyModel, reference_field="nest")
+
+async def model() -> None:
+    m_list = MyModel.get_list()
+    m = m_list[0] # Mypy error: we didn't await get_list
+    m = (await m_list)[0]
+    await m.save()
+    print(m.field)
+    print(m.bad_field)  # Mypy error, bad_field isn't an attribute of MyModel
+    nest_list = await NestedModel.get_list()
+    n = nest_list[0]
+    reveal_type(n.nest) # MyModel, since we used TYPE_CHECKING in definition
+    n.nest.field = "abc"
+    n.nest.field = 1 # Mypy error: MyModel.field is a string, not int

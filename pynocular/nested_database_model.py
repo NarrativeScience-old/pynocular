@@ -1,7 +1,10 @@
 """Class that wraps nested DatabaseModels"""
-from typing import Any, Callable
+from typing import Any, Type, TYPE_CHECKING
 
 from pynocular.exceptions import NestedDatabaseModelNotResolved
+
+if TYPE_CHECKING:
+    from pynocular.database_model import DatabaseModel
 
 
 class NestedDatabaseModel:
@@ -9,7 +12,7 @@ class NestedDatabaseModel:
 
     def __init__(
         self,
-        model_cls: Callable,
+        model_cls: Type["DatabaseModel"],
         _id: Any,
         model: "DatabaseModel" = None,  # noqa
     ) -> None:

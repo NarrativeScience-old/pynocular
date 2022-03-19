@@ -1,4 +1,5 @@
 """Exceptions module for ORM package"""
+from enum import Enum
 import traceback
 from typing import Any, Dict, Iterable, Optional
 
@@ -89,7 +90,7 @@ class BaseException(Exception):
 
     # This property denotes the component that owns will raise this exception. This
     # property can be used for component level monitoring
-    COMPONENT = None
+    COMPONENT: Optional[Enum] = None
 
     def __init__(
         self,
@@ -149,7 +150,9 @@ class BaseException(Exception):
             A dictionary of property keys to their stringified values
 
         """
-        return {"component": self.COMPONENT.name}
+        if self.COMPONENT is not None:
+            return {"component": self.COMPONENT.name}
+        return {}
 
     def __str__(self) -> str:
         """Returns the message describing the exception"""
@@ -311,7 +314,7 @@ class InvalidSqlIdentifierErr(Exception):
 class NestedDatabaseModelNotResolved(BaseException):
     """Indicates a property was accessed before the reference was resolved"""
 
-    def __init__(self, model_cls: str, nested_model_id_value: Any) -> None:
+    def __init__(self, model_cls: Any, nested_model_id_value: Any) -> None:
         """Initialize NestedDatabaseModelNotResolved
 
         Args:

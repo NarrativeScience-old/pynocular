@@ -1,7 +1,7 @@
 """Module for aiopg transaction utils"""
 import asyncio
 import sys
-from typing import Dict, Optional, Union
+from typing import Any, Dict, no_type_check, Optional, Type, Union
 
 import aiocontextvars as contextvars
 from aiopg.sa.connection import SAConnection
@@ -10,6 +10,7 @@ import aiopg.sa.engine
 transaction_connections_var = contextvars.ContextVar("transaction_connections")
 
 
+@no_type_check
 def get_current_task() -> asyncio.Task:
     """Get the current task when this method is called
 
@@ -37,12 +38,12 @@ class LockedConnection(SAConnection):
         self._conn = connection
         self.lock = asyncio.Lock()
 
-    async def execute(self, *args, **kwargs):
+    async def execute(self, *args: Any, **kwargs: Any) -> Any:
         """Wrapper around the `execute` method of the wrapped SAConnection"""
         async with self.lock:
             return await self._conn.execute(*args, **kwargs)
 
-    def __getattr__(self, attr):
+    def __getattr__(self, attr: str) -> Any:
         """Except for execute, all other attributes should pass through"""
         return getattr(self._conn, attr)
 
@@ -192,7 +193,10 @@ class transaction:
                 raise
         return conn
 
-    async def __aexit__(self, exc_type, exc_value, tb) -> None:
+    @no_type_check
+    async def __aexit__(
+        self, exc_type: Optional[Type], exc_value: Any, tb: Any
+    ) -> None:
         """Exit the transaction context
 
         If this is the top level context, then commit the transaction (unless
@@ -251,7 +255,7 @@ class ConditionalTransaction(transaction):
         """
         super().__init__(engine)
         # The connection object, if functioning as standard connection
-        self._conn = None
+        self._conn: Optional[SAConnection] = None
 
     async def __aenter__(self) -> Union[LockedConnection, SAConnection]:
         """Conditionally establish the transaction context
@@ -269,7 +273,9 @@ class ConditionalTransaction(transaction):
         self._conn = await self._engine.acquire()
         return self._conn
 
-    async def __aexit__(self, exc_type, exc_value, tb) -> None:
+    async def __aexit__(
+        self, exc_type: Optional[Type], exc_value: Any, tb: Any
+    ) -> None:
         """Exit the transaction context"""
         if self._conn is not None:
             await self._conn.close()
