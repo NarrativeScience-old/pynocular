@@ -826,7 +826,10 @@ class MyModel(
     other: int = 0
 
 class NestedModel(DatabaseModel, table_name = "table2", database_info=DBInfo("type")):
-    nest: nested_model(MyModel, reference_field="nest") # type: ignore
+    if TYPE_CHECKING:
+        nest: MyModel
+    else:
+        nest: nested_model(MyModel, reference_field="nest")
 
 async def model() -> None:
     m_list = await MyModel.get_list()
@@ -836,4 +839,4 @@ async def model() -> None:
     print(m.bad_field)  # Mypy error!
     nest_list = await NestedModel.get_list()
     n = nest_list[0]
-    reveal_type(n.nest) # Any, since we used type: ignore for definition
+    reveal_type(n.nest) # MyModel, since we used TYPE_CHECKING in definition
