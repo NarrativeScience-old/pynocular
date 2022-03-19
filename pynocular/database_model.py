@@ -819,6 +819,8 @@ class DatabaseModel(_DatabaseModel, BaseModel):
     pass
 
 
+#-------------- Prototype code to mess around with ----------------
+
 class MyModel(
     DatabaseModel, table_name="my_table", database_info=DBInfo("type", (("a", "b"),))
 ):
@@ -832,11 +834,14 @@ class NestedModel(DatabaseModel, table_name = "table2", database_info=DBInfo("ty
         nest: nested_model(MyModel, reference_field="nest")
 
 async def model() -> None:
-    m_list = await MyModel.get_list()
-    m = m_list[0]
+    m_list = MyModel.get_list()
+    m = m_list[0] # Mypy error: we didn't await get_list
+    m = (await m_list)[0]
     await m.save()
     print(m.field)
-    print(m.bad_field)  # Mypy error!
+    print(m.bad_field)  # Mypy error, bad_field isn't an attribute of MyModel
     nest_list = await NestedModel.get_list()
     n = nest_list[0]
     reveal_type(n.nest) # MyModel, since we used TYPE_CHECKING in definition
+    n.nest.field = "abc"
+    n.nest.field = 1 # Mypy error: MyModel.field is a string, not int
