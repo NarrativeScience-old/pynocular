@@ -1,102 +1,136 @@
-from abc import ABC, abstractmethod, abstractmethod
-from typing import Any, Dict, List, Optional
+"""Contains base classes for defining database backends"""
 
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
+from typing import Any, Dict, List, Optional, Set
+
+from sqlalchemy import Column, Table
 from sqlalchemy.sql.elements import BinaryExpression, UnaryExpression
 
 
+@dataclass
+class DatabaseModelConfig:
+    """Data class with parsed configuration for a database model.
+
+    This class will be instantiated by a database model class at import time.
+    """
+
+    primary_keys: List[Column]
+    db_managed_fields: List[str]
+    nested_model_attributes: Set[str]
+    nested_attr_table_field_map: Dict[str, str]
+    nested_table_field_attr_map: Dict[str, str]
+    table: Table
+
+    @property
+    def primary_key_names(self) -> Set[str]:
+        return {primary_key.name for primary_key in self.primary_keys}
+
+
 class DatabaseModelBackend(ABC):
+    """Defines abstract base class that database backends must implement
+
+    The backend is agnostic to the DatabaseModel. This means that the concept of a
+    DatabaseModel should not show up in any of the backend method implementations.
+
+    * Methods should accept and return raw dictionaries.
+    * Each method should accept a DatabaseModelConfig instance, which contains references
+      to a table and columns that can be used to build queries suited to the backend.
+
+    """
+
     @abstractmethod
     async def select(
         self,
+        config: DatabaseModelConfig,
         where_expressions: Optional[List[BinaryExpression]] = None,
         order_by: Optional[List[UnaryExpression]] = None,
         limit: Optional[int] = None,
-    ) -> List["DatabaseModelBackend"]:
-        """Execute a SELECT on the DatabaseModel table with the given parameters
+    ) -> List[Dict[str, Any]]:
+        """Select a group of records
 
         Args:
+            config: DatabaseModelConfig instance that contains references to a table and
+                columns that can be used to build queries suited to the backend.
             where_expressions: A list of BinaryExpressions for the table that will be
-                `and`ed together for the where clause of the SELECT
+                `and`ed together for the where clause of the backend query
             order_by: A list of criteria for the order_by clause
-            limit: The number of instances to return
+            limit: The number of records to return
 
         Returns:
-            A list of DatabaseModel instances
-
-        Raises:
-            DatabaseModelMisconfigured: The class is missing a database table
+            A list of record dicts
 
         """
         pass
 
     @abstractmethod
-    async def create_list(
-        self, models: List["DatabaseModelBackend"]
-    ) -> List["DatabaseModelBackend"]:
-        """Create new batch of records in one query
-
-        This will mutate the provided models to include db managed column values.
+    async def create_records(
+        self, config: DatabaseModelConfig, records: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
+        """Create new group of records
 
         Args:
-            models: List of database models to persist
+            config: DatabaseModelConfig instance that contains references to a table and
+                columns that can be used to build queries suited to the backend.
+            records: List of records to persist
 
         Returns:
-            list of new database models that have been saved
+            list of newly created records
 
         """
         pass
 
     @abstractmethod
-    async def delete_records(self, **kwargs: Any) -> None:
-        """Execute a DELETE on a DatabaseModel with the provided kwargs
+    async def delete_records(
+        self, config: DatabaseModelConfig, where_expressions: List[BinaryExpression]
+    ) -> None:
+        """Delete a group of records
 
         Args:
-            kwargs: The filterable key/value pairs for the where clause. These will be
-                `and`ed together
-
-        Raises:
-            DatabaseModelMisconfigured: The class is missing a database table
-            DatabaseModelMissingField: One of the fields provided in the query does not
-                exist on the database table
+            config: DatabaseModelConfig instance that contains references to a table and
+                columns that can be used to build queries suited to the backend.
+            where_expressions: A list of BinaryExpressions for the table that will be
+                `and`ed together for the where clause of the backend query
 
         """
         pass
 
     @abstractmethod
-    async def update(
+    async def update_records(
         self,
+        config: DatabaseModelConfig,
         where_expressions: Optional[List[BinaryExpression]],
         values: Dict[str, Any],
-    ) -> List["DatabaseModelBackend"]:
-        """Execute an UPDATE on a DatabaseModel table with the given parameters
+    ) -> List[Dict[str, Any]]:
+        """Update a group of records
 
         Args:
+            config: DatabaseModelConfig instance that contains references to a table and
+                columns that can be used to build queries suited to the backend.
             where_expressions: A list of BinaryExpressions for the table that will be
-                `and`ed together for the where clause of the UPDATE
-            values: The field and values to update all records to that match the
+                `and`ed together for the where clause of the backend query
+            values: The map of key-values to update all records to that match the
                 where_expressions
 
         Returns:
-            The updated DatabaseModels
-
-        Raises:
-            DatabaseModelMisconfigured: The class is missing a database table
+            the updated database records
 
         """
         pass
 
     @abstractmethod
-    async def save(self, include_nested_models=False) -> None:
-        """Update the database record this object represents with its current state
+    async def upsert(
+        self, config: DatabaseModelConfig, record: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Upsert a single database record
 
         Args:
-            include_nested_models: If True, any nested models should get saved before
-                this object gets saved
+            config: DatabaseModelConfig instance that contains references to a table and
+                columns that can be used to build queries suited to the backend.
+            record: The record to update
+
+        Returns:
+            the updated record
 
         """
-        pass
-
-    @abstractmethod
-    async def delete(self) -> None:
-        """Delete this record from the database"""
         pass

@@ -2,6 +2,7 @@ import asyncio
 from contextlib import contextmanager
 from datetime import datetime
 from enum import Enum, EnumMeta
+from pyexpat import model
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Sequence, Set, Type
 from uuid import UUID as stdlib_uuid
 
@@ -19,10 +20,10 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID as sqlalchemy_uuid
 from sqlalchemy.schema import FetchedValue
-from sqlalchemy.sql.elements import BinaryExpression, UnaryExpression
 from sqlalchemy.sql.base import ImmutableColumnCollection
-from pynocular.backends.base import DatabaseModelBackend
-from pynocular.backends.util import get_backend
+from sqlalchemy.sql.elements import BinaryExpression, UnaryExpression
+from pynocular.backends.base import DatabaseModelConfig
+from pynocular.backends.context import get_backend
 from pynocular.database_model import UUID_STR
 
 from pynocular.exceptions import (
@@ -34,45 +35,42 @@ from pynocular.exceptions import (
 
 
 class DatabaseModel(BaseModel):
+    """DatabaseModel defines a Pydantic model that abstracts away backend storage
+
+    This allows us to use the same object for both database queries and HTTP requests.
+    Methods on the DatabaseModel call through to the active backend implementation. The
+    backend handle queries and storage.
+    """
 
     if TYPE_CHECKING:
-        # Populated by _initialize_table. Defined here to help IDEs only
-        _primary_keys: List[Column]
-        _db_managed_fields: List[str]
-        _nested_model_attributes: Set[str]
-        _nested_attr_table_field_map: Dict[str, str]
-        _nested_table_field_attr_map: Dict[str, str]
-        _table: Table
-        columns: ImmutableColumnCollection
-
-        # Set by backend method
-        _backend: DatabaseModelBackend
+        # Set by _process_config
+        _config: DatabaseModelConfig
 
     @staticmethod
-    def _initialize_table(cls) -> "DatabaseModel":
-        """Returns a SQLAlchemy table definition to expose SQLAlchemy functions
+    def _process_config(cls, table_name: str) -> DatabaseModelConfig:
+        """Process configuration passed into the DatabaseModel subclass signature
 
-        This method should cache the Table on the __table__ class property.
-        We don't want to have to recalculate the table for every SQL call,
-        so it's desirable to cache this at the class level.
+        The primary job of this method is to generate a DatabaseModelConfig instance,
+        specifically a SQLAlchemy table definition for backend implementations to
+        leverage.
 
         Returns:
-            A Table object based on the Field properties defined from the Pydantic model
+            DatabaseModelConfig instance
 
         Raises:
-            DatabaseModelMisconfigured: When the class does not defined certain properties;
-                or cannot be converted to a Table
+            DatabaseModelMisconfigured: When the class does not defined certain
+                properties; or cannot be converted to a Table
 
         """
         # We may have times where we need a compound primary key.
         # We store each one into this list and have our query functions
         # handle using it
-        _primary_keys: List[Column] = []
+        primary_keys: List[Column] = []
 
         # Some fields are exclusively produced by the database server
         # For all save operations, we need to get those values from the database
         # These are the server_default and server_onupdate functions in SQLAlchemy
-        _db_managed_fields: List[str] = []
+        db_managed_fields: List[str] = []
 
         # The following tables track which attributes on the model are nested model
         # references
@@ -82,9 +80,9 @@ class DatabaseModel(BaseModel):
 
         # In order to manage this we also need maps from attribute name to table_field_name
         # and back
-        _nested_model_attributes: Set[str] = set()
-        _nested_attr_table_field_map: Dict[str, str] = {}
-        _nested_table_field_attr_map: Dict[str, str] = {}
+        nested_model_attributes: Set[str] = set()
+        nested_attr_table_field_map: Dict[str, str] = {}
+        nested_table_field_attr_map: Dict[str, str] = {}
 
         columns: List[Column] = []
         for field in cls.__fields__.values():
@@ -122,16 +120,12 @@ class DatabaseModel(BaseModel):
             elif field.type_ is datetime:
                 type = TIMESTAMP(timezone=True)
             elif field.type_.__name__ == "NestedModel":
-                _nested_model_attributes.add(name)
+                nested_model_attributes.add(name)
                 # If the field name on the NestedModel type is not None, use that for the
                 # column name
                 if field.type_.reference_field_name is not None:
-                    _nested_attr_table_field_map[
-                        name
-                    ] = field.type_.reference_field_name
-                    _nested_table_field_attr_map[
-                        field.type_.reference_field_name
-                    ] = name
+                    nested_attr_table_field_map[name] = field.type_.reference_field_name
+                    nested_table_field_attr_map[field.type_.reference_field_name] = name
                     name = field.type_.reference_field_name
 
                 # Assume all IDs are UUIDs for now
@@ -148,41 +142,44 @@ class DatabaseModel(BaseModel):
 
             if fetch_on_create:
                 column.server_default = FetchedValue()
-                _db_managed_fields.append(name)
+                db_managed_fields.append(name)
 
             if fetch_on_update:
                 column.server_onupdate = FetchedValue()
-                _db_managed_fields.append(name)
+                db_managed_fields.append(name)
 
             if is_primary_key:
-                _primary_keys.append(column)
+                primary_keys.append(column)
 
             columns.append(column)
 
         # Define metadata for the database connection on the class level so we don't
         # have to recalculate the table for each database call
-        _table = Table(cls.Config.table_name, MetaData(), *columns)
+        table = Table(table_name, MetaData(), *columns)
 
-        # _database_info: DBInfo = None
+        return DatabaseModelConfig(
+            db_managed_fields=db_managed_fields,
+            nested_attr_table_field_map=nested_attr_table_field_map,
+            nested_model_attributes=nested_model_attributes,
+            nested_table_field_attr_map=nested_table_field_attr_map,
+            primary_keys=primary_keys,
+            table=table,
+        )
 
-        cls._db_managed_fields = _db_managed_fields
-        cls._nested_table_field_attr_map = _nested_table_field_attr_map
-        cls._primary_keys = _primary_keys
-        cls._table = _table
-        cls.columns = _table.c
+    def __init_subclass__(cls, table_name: str, **kwargs) -> None:
+        """Hook for processing class configuration when DatabaseModel is subclassed
 
-    def __init_subclass__(cls, **kwargs):
+        Args:
+            table_name: Name of the database table
+
+        """
         super().__init_subclass__(**kwargs)
-        DatabaseModel._initialize_table(cls)
-        return cls
+        cls._config = DatabaseModel._process_config(cls, table_name)
 
     @classmethod
-    def _backend(cls) -> None:
-        cls._backend = backend_cls(cls, **kwargs)
-        try:
-            yield
-        finally:
-            cls._backend = None
+    @property
+    def columns(self) -> ImmutableColumnCollection:
+        return self._config.table.c
 
     @classmethod
     def from_dict(cls, _dict: Dict[str, Any]) -> "DatabaseModel":
@@ -201,7 +198,7 @@ class DatabaseModel(BaseModel):
         """
         modified_dict = {}
         for key, value in _dict.items():
-            modified_key = cls._nested_table_field_attr_map.get(key, key)
+            modified_key = cls._config.nested_table_field_attr_map.get(key, key)
             modified_dict[modified_key] = value
         return cls(**modified_dict)
 
@@ -233,11 +230,13 @@ class DatabaseModel(BaseModel):
                 if isinstance(prop_value, Enum):
                     prop_value = prop_value.name
 
-            if prop_name in self._nested_model_attributes:
+            if prop_name in self._config.nested_model_attributes:
                 # self.dict() will serialize any BaseModels into a dict so fetch the
                 # actual object from self
                 temp_prop_value = getattr(self, prop_name)
-                prop_name = self._nested_attr_table_field_map.get(prop_name, prop_name)
+                prop_name = self._config.nested_attr_table_field_map.get(
+                    prop_name, prop_name
+                )
                 # temp_prop_value can be `None` if the nested key is optional
                 if temp_prop_value is not None:
                     prop_value = temp_prop_value.get_primary_id()
@@ -262,7 +261,7 @@ class DatabaseModel(BaseModel):
         obj = await cls.get(*args, **kwargs)
         gatherables = [
             (getattr(obj, prop_name)).fetch()
-            for prop_name in cls._nested_model_attributes
+            for prop_name in cls._config.nested_model_attributes
         ]
         await asyncio.gather(*gatherables)
 
@@ -288,25 +287,27 @@ class DatabaseModel(BaseModel):
         if (
             (len(args) > 1)
             or (len(args) == 1 and len(kwargs) > 0)
-            or (len(args) == 1 and len(cls._primary_keys) > 1)
+            or (len(args) == 1 and len(cls._config.primary_keys) > 1)
             or (len(args) == 0 and len(kwargs) == 0)
         ):
             raise InvalidMethodParameterization("get", args=args, kwargs=kwargs)
 
         if len(args) == 1:
-            primary_key_dict = {cls._primary_keys[0].name: args[0]}
+            primary_key_dict = {cls._config.primary_keys[0].name: args[0]}
         else:
             primary_key_dict = kwargs
 
         original_primary_key_dict = primary_key_dict.copy()
         where_expressions = []
-        for primary_key in cls._primary_keys:
+        for primary_key in cls._config.primary_keys:
             primary_key_value = primary_key_dict.pop(primary_key.name)
             where_expressions.append(primary_key == primary_key_value)
 
         records = await cls.select(where_expressions=where_expressions, limit=1)
         if len(records) == 0:
-            raise DatabaseRecordNotFound(cls._table.name, **original_primary_key_dict)
+            raise DatabaseRecordNotFound(
+                cls._config.table.name, **original_primary_key_dict
+            )
 
         return records[0]
 
@@ -335,10 +336,10 @@ class DatabaseModel(BaseModel):
             The ID value for this DatabaseModel instance
 
         """
-        if len(self._primary_keys) > 1:
+        if len(self._config.primary_keys) > 1:
             return None
 
-        return getattr(self, self._primary_keys[0].name)
+        return getattr(self, self._config.primary_keys[0].name)
 
     async def fetch(self, resolve_references: bool = False) -> None:
         """Gets the latest of the object from the database and updates itself
@@ -350,7 +351,7 @@ class DatabaseModel(BaseModel):
         # Get the latest version of self
         get_params = {
             primary_key.name: getattr(self, primary_key.name)
-            for primary_key in self._primary_keys
+            for primary_key in self._config.primary_keys
         }
         if resolve_references:
             new_self = await self.get_with_refs(**get_params)
@@ -377,12 +378,14 @@ class DatabaseModel(BaseModel):
                 exist on the database table
 
         """
-        where_clause_list = []
+        where_expressions = []
         for field_name, db_field_value in kwargs.items():
-            db_field_name = cls._nested_attr_table_field_map.get(field_name, field_name)
+            db_field_name = cls._config.nested_attr_table_field_map.get(
+                field_name, field_name
+            )
 
             try:
-                db_field = getattr(cls._table.c, db_field_name)
+                db_field = getattr(cls._config.table.c, db_field_name)
             except AttributeError:
                 raise DatabaseModelMissingField(cls.__name__, db_field_name)
 
@@ -391,9 +394,9 @@ class DatabaseModel(BaseModel):
             else:
                 exp = db_field == db_field_value
 
-            where_clause_list.append(exp)
+            where_expressions.append(exp)
 
-        return await cls.select(where_expressions=where_clause_list)
+        return await cls.select(where_expressions=where_expressions)
 
     @classmethod
     async def select(
@@ -417,9 +420,13 @@ class DatabaseModel(BaseModel):
             DatabaseModelMisconfigured: The class is missing a database table
 
         """
-        return await get_backend(cls).select(
-            where_expressions=where_expressions, order_by=order_by, limit=limit
+        records = await get_backend().select(
+            cls._config,
+            where_expressions=where_expressions,
+            order_by=order_by,
+            limit=limit,
         )
+        return [cls.from_dict(record) for record in records]
 
     @classmethod
     async def create_list(cls, models: List["DatabaseModel"]) -> List["DatabaseModel"]:
@@ -434,7 +441,23 @@ class DatabaseModel(BaseModel):
             list of new database models that have been saved
 
         """
-        pass
+        values = []
+        for model in models:
+            dict_obj = model.to_dict()
+            for field in cls._config.db_managed_fields:
+                # Remove any fields that the database calculates
+                del dict_obj[field]
+            values.append(dict_obj)
+
+        records = await get_backend().create_records(cls._config, values)
+        # Set db managed column information on the object
+        for record, model in zip(records, models):
+            for column in cls._config.db_managed_fields:
+                col_val = record.get(column)
+                if col_val is not None:
+                    setattr(model, column, col_val)
+
+        return models
 
     @classmethod
     async def delete_records(cls, **kwargs: Any) -> None:
@@ -450,7 +473,25 @@ class DatabaseModel(BaseModel):
                 exist on the database table
 
         """
-        pass
+        where_expressions = []
+        for field_name, db_field_value in kwargs.items():
+            db_field_name = cls._config.nested_attr_table_field_map.get(
+                field_name, field_name
+            )
+
+            try:
+                db_field = getattr(cls._config.table.c, db_field_name)
+            except AttributeError:
+                raise DatabaseModelMissingField(cls.__name__, db_field_name)
+
+            if isinstance(db_field_value, list):
+                exp = db_field.in_(db_field_value)
+            else:
+                exp = db_field == db_field_value
+
+            where_expressions.append(exp)
+
+        return await get_backend().delete_records(cls._config, where_expressions)
 
     @classmethod
     async def update_record(cls, **kwargs: Any) -> "DatabaseModel":
@@ -468,19 +509,21 @@ class DatabaseModel(BaseModel):
         """
         where_expressions = []
         primary_key_dict = {}
-        for primary_key in cls._primary_keys:
+        for primary_key in cls._config.primary_keys:
             primary_key_value = kwargs.pop(primary_key.name)
             where_expressions.append(primary_key == primary_key_value)
             primary_key_dict[primary_key.name] = primary_key_value
 
         modified_kwargs = {}
         for field_name, value in kwargs.items():
-            db_field_name = cls._nested_attr_table_field_map.get(field_name, field_name)
+            db_field_name = cls._config.nested_attr_table_field_map.get(
+                field_name, field_name
+            )
             modified_kwargs[db_field_name] = value
 
         updated_records = await cls.update(where_expressions, modified_kwargs)
         if len(updated_records) == 0:
-            raise DatabaseRecordNotFound(cls._table.name, **primary_key_dict)
+            raise DatabaseRecordNotFound(cls._config.table.name, **primary_key_dict)
         return updated_records[0]
 
     @classmethod
@@ -502,18 +545,34 @@ class DatabaseModel(BaseModel):
             DatabaseModelMisconfigured: The class is missing a database table
 
         """
-        pass
+        return [
+            cls.from_dict(record)
+            for record in await get_backend().update_records(
+                where_expressions=where_expressions, values=values
+            )
+        ]
 
-    async def save(self, include_nested_models=False) -> None:
-        """Update the database record this object represents with its current state
+    async def save(self) -> None:
+        """Update the database record this object represents with its current state"""
+        dict_self = self.to_dict()
+        for field in self._config.db_managed_fields:
+            if field in self._config.primary_key_names and dict_self[field] is not None:
+                continue
 
-        Args:
-            include_nested_models: If True, any nested models should get saved before
-                this object gets saved
+            # Remove any fields that the database calculates
+            del dict_self[field]
 
-        """
-        pass
+        record = await get_backend().upsert(
+            self._config,
+            dict_self,
+        )
+        for field in self._config.db_managed_fields:
+            setattr(self, field, record[field])
 
     async def delete(self) -> None:
         """Delete this record from the database"""
-        pass
+        where_expressions = [
+            getattr(self._config.table.c, pkey.name) == getattr(self, pkey.name)
+            for pkey in self._config.primary_keys
+        ]
+        return await get_backend().delete_records(self._config, where_expressions)
