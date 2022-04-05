@@ -11,11 +11,17 @@ from pynocular.model import DatabaseModel
 
 @pytest.fixture()
 async def sql_backend():
-    async with Database("postgresql://localhost:5432/jon.drake") as db:
-        yield SQLDatabaseModelBackend(db=db)
+    async with Database("sqlite:///example.db") as db:
+        await db.execute(
+            "CREATE TABLE IF NOT EXISTS things (id INTEGER PRIMARY KEY, name TEXT)"
+        )
+        try:
+            yield SQLDatabaseModelBackend(db)
+        finally:
+            await db.execute("DROP TABLE things")
 
 
-class Org(DatabaseModel, table_name="organizations"):
+class Thing(DatabaseModel, table_name="things"):
     """A test database model"""
 
     id: Optional[int] = Field(primary_key=True, fetch_on_create=True)
@@ -23,15 +29,13 @@ class Org(DatabaseModel, table_name="organizations"):
 
 
 @pytest.mark.asyncio
-async def test_org(sql_backend):
+async def test_thing(sql_backend):
     with backend(sql_backend):
-        orgs: List[Org] = await Org.select(order_by=[asc(Org.columns.id)])
-        org = orgs[0]
-        assert org.name == "second"
+        things: List[Thing] = await Thing.select()
+        assert things == []
 
-        org.name = "second"
-        await org.save()
-
-        await Org.create_list([Org(name="hello"), Org(name="world")])
-        orgs: List[Org] = await Org.select(order_by=[asc(Org.columns.id)])
-        assert {o.name for o in orgs} == {"second", "hello", "world"}
+        things = await Thing.create_list([Thing(name="hello"), Thing(name="world")])
+        assert things[0].name == "hello"
+        assert things[0].id == 1
+        assert things[1].name == "world"
+        assert things[1].id == 2
