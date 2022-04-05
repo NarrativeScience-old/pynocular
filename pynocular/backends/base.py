@@ -10,7 +10,7 @@ from sqlalchemy.sql.elements import BinaryExpression, UnaryExpression
 
 @dataclass
 class DatabaseModelConfig:
-    """Data class with parsed configuration for a database model.
+    """Data class that holds parsed configuration for a database model.
 
     This class will be instantiated by a database model class at import time.
     """
@@ -24,6 +24,7 @@ class DatabaseModelConfig:
 
     @property
     def primary_key_names(self) -> Set[str]:
+        """Set of primary key names"""
         return {primary_key.name for primary_key in self.primary_keys}
 
 

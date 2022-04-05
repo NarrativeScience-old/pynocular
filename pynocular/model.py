@@ -1,12 +1,12 @@
+"""Contains DatabaseModel class"""
+
 import asyncio
-from contextlib import contextmanager
 from datetime import datetime
 from enum import Enum, EnumMeta
-from pyexpat import model
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Sequence, Set, Type
+from typing import Any, Dict, List, Optional, Sequence, Set, TYPE_CHECKING
 from uuid import UUID as stdlib_uuid
 
-from pydantic import UUID4, BaseModel, PositiveFloat, PositiveInt
+from pydantic import BaseModel, PositiveFloat, PositiveInt, UUID4
 from sqlalchemy import (
     Boolean,
     Column,
@@ -22,10 +22,10 @@ from sqlalchemy.dialects.postgresql import JSONB, UUID as sqlalchemy_uuid
 from sqlalchemy.schema import FetchedValue
 from sqlalchemy.sql.base import ImmutableColumnCollection
 from sqlalchemy.sql.elements import BinaryExpression, UnaryExpression
+
 from pynocular.backends.base import DatabaseModelConfig
 from pynocular.backends.context import get_backend
 from pynocular.database_model import UUID_STR
-
 from pynocular.exceptions import (
     DatabaseModelMisconfigured,
     DatabaseModelMissingField,
@@ -179,6 +179,7 @@ class DatabaseModel(BaseModel):
     @classmethod
     @property
     def columns(self) -> ImmutableColumnCollection:
+        """Reference to the model's table's column collection"""
         return self._config.table.c
 
     @classmethod
@@ -444,18 +445,32 @@ class DatabaseModel(BaseModel):
         values = []
         for model in models:
             dict_obj = model.to_dict()
+
+            # Remove any fields that the database calculates
             for field in cls._config.db_managed_fields:
-                # Remove any fields that the database calculates
                 del dict_obj[field]
+
+            # Remove keys for primary keys that don't have a value. This indicates that
+            # the backend will generate new values.
+            for field in cls._config.primary_keys:
+                if dict_obj.get(field.name) is None:
+                    del dict_obj[field.name]
+
             values.append(dict_obj)
 
         records = await get_backend().create_records(cls._config, values)
+
         # Set db managed column information on the object
         for record, model in zip(records, models):
             for column in cls._config.db_managed_fields:
                 col_val = record.get(column)
                 if col_val is not None:
                     setattr(model, column, col_val)
+
+            for field in cls._config.primary_keys:
+                value = record.get(field.name)
+                if value is not None:
+                    setattr(model, field.name, value)
 
         return models
 

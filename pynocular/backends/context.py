@@ -1,11 +1,10 @@
-"""Contains contextvar definition for the active database backend"""
+"""Contains contextvar and helper functions to manage the active database backend"""
 
 from contextlib import contextmanager
 
 import aiocontextvars as contextvars
 
 from .base import DatabaseModelBackend
-
 
 _backend = contextvars.ContextVar("database_model_backend", default=None)
 

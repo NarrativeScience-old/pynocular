@@ -1,26 +1,22 @@
 """Contains the SQLDatabaseModelBackend class"""
 
 from typing import Any, Dict, List, Optional
-from databases import Database
 
+from databases import Database
 from sqlalchemy import and_
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.sql.elements import BinaryExpression, UnaryExpression
 
-from pynocular.exceptions import (
-    InvalidFieldValue,
-    InvalidTextRepresentation,
-)
-from pynocular.backends.base import (
-    DatabaseModelBackend,
-    DatabaseModelConfig,
-)
+from pynocular.backends.base import DatabaseModelBackend, DatabaseModelConfig
+from pynocular.exceptions import InvalidFieldValue, InvalidTextRepresentation
 
 
 class SQLDatabaseModelBackend(DatabaseModelBackend):
     """SQL database model backend
 
-    This backend works with any SQL dialect supported by https://www.encode.io/databases/
+    This backend works with SQL dialects supported by https://www.encode.io/databases/. except sqlite*
+
+    * sqlalchemy does not support the `RETURNING` clause. See https://github.com/sqlalchemy/sqlalchemy/issues/6195
     """
 
     def __init__(self, db: Database):
@@ -39,7 +35,7 @@ class SQLDatabaseModelBackend(DatabaseModelBackend):
         order_by: Optional[List[UnaryExpression]] = None,
         limit: Optional[int] = None,
     ) -> List[Dict[str, Any]]:
-        """Execute a SELECT on the DatabaseModel table with the given parameters
+        """Select a group of records
 
         Args:
             config: DatabaseModelConfig instance that contains references to a table and
