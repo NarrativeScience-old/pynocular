@@ -56,7 +56,7 @@ repos:
         entry: black
         language: python
         types: [file, python]
-        additional_dependencies: [black==21.9b0]
+        additional_dependencies: [black==22.3.0]
 
       - id: pydocstyle
         name: Lint Python docstrings (pydocstyle)
