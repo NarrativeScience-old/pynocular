@@ -25,7 +25,7 @@ async def postgres_backend():
     db_host = os.environ.get(
         "DB_HOST", "postgres" if os.environ.get("CI") else "localhost"
     )
-    db_user_name = os.environ.get("DB_USER_NAME", os.environ["USER"])
+    db_user_name = os.environ.get("DB_USER_NAME", os.environ.get("USER", "postgres"))
     db_user_password = os.environ.get("DB_USER_PASSWORD", "")
     test_db_name = os.environ.get("TEST_DB_NAME", "test_db")
 
