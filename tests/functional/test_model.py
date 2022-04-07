@@ -1,5 +1,6 @@
 """Contains tests for the DatabaseModel backends"""
 
+import logging
 import os
 from typing import List, Optional
 
@@ -31,8 +32,11 @@ async def postgres_backend():
     db_connection_string = f"postgresql://{db_user_name}:{db_user_password}@{db_host}:5432/{test_db_name}?sslmode=disable"
 
     async with Database(maintenance_connection_string) as db:
-        await db.execute(f"DROP DATABASE IF EXISTS {test_db_name}")
-        await db.execute(f"CREATE DATABASE {test_db_name}")
+        try:
+            await db.execute(f"DROP DATABASE IF EXISTS {test_db_name}")
+            await db.execute(f"CREATE DATABASE {test_db_name}")
+        except Exception as e:
+            logging.info(str(e))
 
     async with Database(db_connection_string) as db:
         await db.execute(
