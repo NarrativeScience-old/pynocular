@@ -48,7 +48,10 @@ async def postgres_backend():
             await db.execute("DROP TABLE things")
 
     async with Database(maintenance_connection_string) as db:
-        await db.execute(f"DROP DATABASE IF EXISTS {test_db_name}")
+        try:
+            await db.execute(f"DROP DATABASE IF EXISTS {test_db_name}")
+        except Exception as e:
+            logging.info(str(e))
 
 
 @pytest.fixture()
