@@ -1,5 +1,6 @@
 """Contains tests for the DatabaseModel backends"""
 
+import os
 from typing import List, Optional
 
 from databases import Database
@@ -21,7 +22,21 @@ async def postgres_backend():
         postgres backend
 
     """
-    async with Database("postgres://localhost:5432/postgres") as db:
+    db_host = os.environ.get(
+        "DB_HOST", "postgres" if os.environ.get("CI") else "localhost"
+    )
+    db_user_name = os.environ.get("DB_USER_NAME", os.environ["USER"])
+    db_user_password = os.environ.get("DB_USER_PASSWORD", "")
+    test_db_name = os.environ.get("TEST_DB_NAME", "test_db")
+
+    maintenance_connection_string = f"postgres://{db_user_name}:{db_user_password}@{db_host}:5432/postgres?sslmode=disable"
+    db_connection_string = f"postgresql://{db_user_name}:{db_user_password}@{db_host}:5432/{test_db_name}?sslmode=disable"
+
+    async with Database(maintenance_connection_string) as db:
+        await db.execute(f"DROP DATABASE IF EXISTS {test_db_name}")
+        await db.execute(f"CREATE DATABASE {test_db_name}")
+
+    async with Database(db_connection_string) as db:
         await db.execute(
             "CREATE TABLE IF NOT EXISTS things (id SERIAL PRIMARY KEY, name TEXT)"
         )
@@ -29,6 +44,9 @@ async def postgres_backend():
             yield SQLDatabaseModelBackend(db)
         finally:
             await db.execute("DROP TABLE things")
+
+    async with Database(maintenance_connection_string) as db:
+        await db.execute(f"DROP DATABASE IF EXISTS {test_db_name}")
 
 
 @pytest.fixture()
