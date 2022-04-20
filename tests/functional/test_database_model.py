@@ -75,8 +75,8 @@ class TestDatabaseModel:
             # If this fails, assume its already  created
             pass
 
-        await create_table(testdb, Org._table)
-        await create_table(testdb, Topic._table)
+        await create_table(testdb, Org.get_table())
+        await create_table(testdb, Topic.get_table())
         conn = await (await DBEngine.get_engine(testdb)).acquire()
         await add_datetime_trigger(conn, "organizations")
         await conn.close()

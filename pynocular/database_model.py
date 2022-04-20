@@ -230,7 +230,7 @@ class DatabaseModel:
             ):
                 type = Float
             elif field.type_.__class__ in (AEnumMeta, EnumMeta):
-                type = SQLEnum(field.type_)
+                type = SQLEnum(field.type_, values_callable=lambda obj: [e.value for e in obj])
             elif field.type_ is bool:
                 type = Boolean
             elif field.type_ in (dict, Dict):
@@ -279,6 +279,16 @@ class DatabaseModel:
 
         cls._table = Table(table_name, MetaData(), *columns)
         cls.columns = cls._table.c
+
+    @classmethod
+    def get_table(cls) -> Table:
+        """Get the table object associated with this model
+        
+        Returns:
+            The SQLALChemy table object for the model
+        
+        """
+        return cls._table
 
     @classmethod
     async def get_with_refs(cls, *args: Any, **kwargs: Any) -> "DatabaseModel":
