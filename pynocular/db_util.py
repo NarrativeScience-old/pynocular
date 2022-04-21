@@ -3,36 +3,31 @@
 import logging
 import re
 
-from aiopg.sa.connection import SAConnection
+from databases import Database
 import sqlalchemy as sa
-from sqlalchemy.sql.ddl import CreateTable
+from sqlalchemy.sql.ddl import CreateTable, DropTable
 
-from pynocular.engines import DBEngine, DBInfo
 from pynocular.exceptions import InvalidSqlIdentifierErr
 
 logger = logging.getLogger()
 
 
-async def is_database_available(db_info: DBInfo) -> bool:
+async def is_database_available(connection_string: str) -> bool:
     """Check if the database is available
 
     Args:
-        db_info: A database's connection information
+        connection_string: A connection string for the database
 
     Returns:
         true if the DB exists
 
     """
-    engine = None
     try:
-        engine = await DBEngine.get_engine(db_info)
-        await engine.acquire()
-        return True
+        async with Database(connection_string) as db:
+            await db.execute("SELECT 1")
+            return True
     except Exception:
         return False
-    finally:
-        if engine:
-            engine.close()
 
 
 async def create_new_database(connection_string: str, db_name: str) -> None:
@@ -43,54 +38,46 @@ async def create_new_database(connection_string: str, db_name: str) -> None:
         db_name: the name of the database to create
 
     """
-    existing_db = DBInfo(connection_string)
-    conn = await (await DBEngine.get_engine(existing_db)).acquire()
-    # End existing commit
-    await conn.execute("commit")
-    # Create db
-    await conn.execute(f"drop database if exists {db_name}")
-    await conn.execute(f"create database {db_name}")
-    await conn.close()
+    async with Database(connection_string) as db:
+        # End existing commit
+        await db.execute("COMMIT")
+        # Create db
+        await db.execute(f"DROP DATABASE IF EXISTS {db_name}")
+        await db.execute(f"CREATE DATABASE {db_name}")
 
 
-async def create_table(db_info: DBInfo, table: sa.Table) -> None:
+async def create_table(db: Database, table: sa.Table) -> None:
     """Create table in database
 
     Args:
-        db_info: Information for the database to connect to
+        db: an async database connection
         table: The table to create
 
     """
-    engine = await DBEngine.get_engine(db_info)
-    conn = await engine.acquire()
-    await conn.execute(CreateTable(table))
-    await conn.close()
+    await db.execute(CreateTable(table))
 
 
-async def drop_table(db_info: DBInfo, table: sa.Table) -> None:
+async def drop_table(db: Database, table: sa.Table) -> None:
     """Drop table in database
 
     Args:
-        db_info: Information for the database to connect to
+        db: an async database connection
         table: The table to create
 
     """
-    engine = await DBEngine.get_engine(db_info)
-    conn = await engine.acquire()
-    await conn.execute(f"drop table if exists {table.name}")
-    await conn.close()
+    await db.execute(DropTable(table, if_exists=True))
 
 
-async def setup_datetime_trigger(conn: SAConnection) -> None:
+async def setup_datetime_trigger(db: Database) -> None:
     """Set up created_at/updated_at datetime trigger
 
     Args:
-        conn: an async sqlalchemy connection
+        db: an async database connection
 
     """
-    await conn.execute('CREATE EXTENSION IF NOT EXISTS "uuid-ossp";')
-    await conn.execute('CREATE EXTENSION IF NOT EXISTS "plpgsql";')
-    await conn.execute(
+    await db.execute('CREATE EXTENSION IF NOT EXISTS "uuid-ossp";')
+    await db.execute('CREATE EXTENSION IF NOT EXISTS "plpgsql";')
+    await db.execute(
         """
         CREATE OR REPLACE FUNCTION update_timestamp_columns()
         RETURNS TRIGGER AS $$
@@ -107,17 +94,17 @@ async def setup_datetime_trigger(conn: SAConnection) -> None:
     )
 
 
-async def add_datetime_trigger(conn: SAConnection, table: str) -> None:
+async def add_datetime_trigger(db: Database, table: str) -> None:
     """Helper method for adding created_at and updated_at datetime triggers on a table
 
 
     Args:
-        conn: an async sqlalchemy connection
+        db: an async database connection
         table: The name of the table to add an edit trigger for
 
     """
-    await setup_datetime_trigger(conn)
-    await conn.execute(
+    await setup_datetime_trigger(db)
+    await db.execute(
         """
         CREATE TRIGGER update_{table}_timestamps
         BEFORE INSERT OR UPDATE ON {table}
@@ -128,15 +115,15 @@ async def add_datetime_trigger(conn: SAConnection, table: str) -> None:
     )
 
 
-async def remove_datetime_trigger(conn: SAConnection, table: str) -> None:
+async def remove_datetime_trigger(db: Database, table: str) -> None:
     """Helper method for removing datetime triggers on a table
 
     Args:
-        conn: an async sqlalchemy connection
+        db: an async database connection
         table: The name of the table to remove a trigger for
 
     """
-    await conn.execute(
+    await db.execute(
         "DROP TRIGGER IF EXISTS update_{table}_timestamps on {table}".format(
             table=table
         )

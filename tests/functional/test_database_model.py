@@ -1,46 +1,83 @@
 """Tests for DatabaseModel abstract class"""
-import asyncio
 from asyncio import gather, sleep
 from datetime import datetime
+import logging
 import os
 from typing import Optional
 from uuid import uuid4
 
-from pydantic import BaseModel, Field
+from databases import Database
+from pydantic import Field
 from pydantic.error_wrappers import ValidationError
 import pytest
 
-from pynocular.database_model import database_model, UUID_STR
+from pynocular import (
+    backend,
+    DatabaseModel,
+    MemoryDatabaseModelBackend,
+    SQLDatabaseModelBackend,
+    UUID_STR,
+)
 from pynocular.db_util import (
     add_datetime_trigger,
     create_new_database,
     create_table,
     drop_table,
 )
-from pynocular.engines import DBEngine, DBInfo
 from pynocular.exceptions import DatabaseModelMissingField, DatabaseRecordNotFound
 
-db_user_password = str(os.environ.get("DB_USER_PASSWORD"))
-# DB to initially connect to so we can create a new db
-existing_connection_string = str(
-    os.environ.get(
-        "EXISTING_DB_CONNECTION_STRING",
-        f"postgresql://postgres:{db_user_password}@localhost:5432/postgres?sslmode=disable",
-    )
-)
 
-test_db_name = str(os.environ.get("TEST_DB_NAME", "test_db"))
-test_connection_string = str(
-    os.environ.get(
-        "TEST_DB_CONNECTION_STRING",
-        f"postgresql://postgres:{db_user_password}@localhost:5432/{test_db_name}?sslmode=disable",
-    )
-)
-testdb = DBInfo(test_connection_string)
+@pytest.fixture(scope="module")
+async def postgres_backend():
+    """Fixture that yields a Postgres backend
+
+    Yields:
+        postgres backend
+
+    """
+    db_host = os.environ.get("DB_HOST", "localhost")
+    db_user_name = os.environ.get("DB_USER_NAME", os.environ.get("USER", "postgres"))
+    db_user_password = os.environ.get("DB_USER_PASSWORD", "")
+    test_db_name = os.environ.get("TEST_DB_NAME", "test_db")
+
+    maintenance_connection_string = f"postgres://{db_user_name}:{db_user_password}@{db_host}:5432/postgres?sslmode=disable"
+    db_connection_string = f"postgresql://{db_user_name}:{db_user_password}@{db_host}:5432/{test_db_name}?sslmode=disable"
+
+    try:
+        await create_new_database(maintenance_connection_string, test_db_name)
+    except Exception as e:
+        # If this fails, assume its already created
+        logging.info(str(e))
+
+    async with Database(db_connection_string) as db:
+        await create_table(db, Org.table)
+        await create_table(db, Topic.table)
+        await add_datetime_trigger(db, "organizations")
+        try:
+            yield SQLDatabaseModelBackend(db)
+        finally:
+            await drop_table(db, Topic.table)
+            await drop_table(db, Org.table)
+
+    async with Database(maintenance_connection_string) as db:
+        try:
+            await db.execute(f"DROP DATABASE IF EXISTS {test_db_name}")
+        except Exception as e:
+            logging.info(str(e))
 
 
-@database_model("organizations", testdb)
-class Org(BaseModel):
+@pytest.fixture()
+async def memory_backend():
+    """Fixture that yields an in-memory backend
+
+    Returns:
+        in-memory backend
+
+    """
+    return MemoryDatabaseModelBackend()
+
+
+class Org(DatabaseModel, table_name="organizations"):
     """A test database model"""
 
     id: UUID_STR = Field(primary_key=True)
@@ -52,8 +89,7 @@ class Org(BaseModel):
     updated_at: Optional[datetime] = Field(fetch_on_update=True)
 
 
-@database_model("topics", testdb)
-class Topic(BaseModel):
+class Topic(DatabaseModel, table_name="topics"):
     """A test class with a nullable JSONB field"""
 
     id: UUID_STR = Field(primary_key=True)
@@ -63,45 +99,17 @@ class Topic(BaseModel):
     name: str = Field(max_length=45)
 
 
-class TestDatabaseModel:
-    """Test suite for DatabaseModel object management"""
-
-    @classmethod
-    async def _setup_class(cls):
-        """Create the database and tables"""
-        try:
-            await create_new_database(existing_connection_string, test_db_name)
-        except Exception:
-            # If this fails, assume its already  created
-            pass
-
-        await create_table(testdb, Org.get_table())
-        await create_table(testdb, Topic.get_table())
-        conn = await (await DBEngine.get_engine(testdb)).acquire()
-        await add_datetime_trigger(conn, "organizations")
-        await conn.close()
-
-    @classmethod
-    def setup_class(cls):
-        """Setup class function"""
-        loop = asyncio.get_event_loop()
-        loop.run_until_complete(cls._setup_class())
-
-    @classmethod
-    async def _teardown_class(cls):
-        """Drop database tables"""
-        await drop_table(testdb, Org._table)
-        await drop_table(testdb, Topic._table)
-
-    @classmethod
-    def teardown_class(cls):
-        """Teardown class function"""
-        loop = asyncio.get_event_loop()
-        loop.run_until_complete(cls._teardown_class())
-
-    @pytest.mark.asyncio
-    async def test_select(self) -> None:
-        """Test that we can select the full set of DatabaseModels"""
+@pytest.mark.parametrize(
+    "_backend",
+    [
+        pytest.lazy_fixture("postgres_backend"),
+        pytest.lazy_fixture("memory_backend"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_select(_backend) -> None:
+    """Test that we can select the full set of DatabaseModels"""
+    with backend(_backend):
         try:
             org = await Org.create(
                 id=str(uuid4()),
@@ -114,9 +122,18 @@ class TestDatabaseModel:
         finally:
             await org.delete()
 
-    @pytest.mark.asyncio
-    async def test_get_list(self) -> None:
-        """Test that we can get_list and get a subset of DatabaseModels"""
+
+@pytest.mark.parametrize(
+    "_backend",
+    [
+        pytest.lazy_fixture("postgres_backend"),
+        pytest.lazy_fixture("memory_backend"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_get_list(_backend) -> None:
+    """Test that we can get_list and get a subset of DatabaseModels"""
+    with backend(_backend):
         try:
             org1 = await Org.create(
                 id=str(uuid4()), name="orgus borgus", slug="orgus_borgus", serial_id=1
@@ -138,9 +155,18 @@ class TestDatabaseModel:
             await org2.delete()
             await org3.delete()
 
-    @pytest.mark.asyncio
-    async def test_get_list__none_filter_value(self) -> None:
-        """Test that we can get_list based on a None filter value"""
+
+@pytest.mark.parametrize(
+    "_backend",
+    [
+        pytest.lazy_fixture("postgres_backend"),
+        pytest.lazy_fixture("memory_backend"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_get_list__none_filter_value(_backend) -> None:
+    """Test that we can get_list based on a None filter value"""
+    with backend(_backend):
         try:
             test_org = await Org.create(
                 id=uuid4(), name="orgus borgus", slug="orgus_borgus", serial_id=None
@@ -150,9 +176,18 @@ class TestDatabaseModel:
         finally:
             await test_org.delete()
 
-    @pytest.mark.asyncio
-    async def test_get_list__none_json_value(self) -> None:
-        """Test that we can get_list for a None value on a JSON field"""
+
+@pytest.mark.parametrize(
+    "_backend",
+    [
+        pytest.lazy_fixture("postgres_backend"),
+        pytest.lazy_fixture("memory_backend"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_get_list__none_json_value(_backend) -> None:
+    """Test that we can get_list for a None value on a JSON field"""
+    with backend(_backend):
         # The None value will be persisted as a SQL NULL value rather than a JSON-encoded
         # null value when the Topic is created, so the filter value None will work here
         try:
@@ -168,9 +203,18 @@ class TestDatabaseModel:
         finally:
             await base_topic.delete()
 
-    @pytest.mark.asyncio
-    async def test_create_new_record(self) -> None:
-        """Test that we can create a database record"""
+
+@pytest.mark.parametrize(
+    "_backend",
+    [
+        pytest.lazy_fixture("postgres_backend"),
+        pytest.lazy_fixture("memory_backend"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_create_new_record(_backend) -> None:
+    """Test that we can create a database record"""
+    with backend(_backend):
         org_id = str(uuid4())
         serial_id = 100
         try:
@@ -183,9 +227,18 @@ class TestDatabaseModel:
             # Make sure we delete org so we don't leak out of test
             await org.delete()
 
-    @pytest.mark.asyncio
-    async def test_create_list(self) -> None:
-        """Test that we can create a list of database records"""
+
+@pytest.mark.parametrize(
+    "_backend",
+    [
+        pytest.lazy_fixture("postgres_backend"),
+        pytest.lazy_fixture("memory_backend"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_create_list(_backend) -> None:
+    """Test that we can create a list of database records"""
+    with backend(_backend):
         try:
             initial_orgs = [
                 Org(id=str(uuid4()), name="fake org 1", slug="fake-slug-1"),
@@ -199,15 +252,33 @@ class TestDatabaseModel:
         finally:
             await gather(*[org.delete() for org in created_orgs])
 
-    @pytest.mark.asyncio
-    async def test_create_list__empty(self) -> None:
-        """Should return empty list for input of empty list"""
+
+@pytest.mark.parametrize(
+    "_backend",
+    [
+        pytest.lazy_fixture("postgres_backend"),
+        pytest.lazy_fixture("memory_backend"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_create_list__empty(_backend) -> None:
+    """Should return empty list for input of empty list"""
+    with backend(_backend):
         created_orgs = await Org.create_list([])
         assert created_orgs == []
 
-    @pytest.mark.asyncio
-    async def test_update_new_record__save(self) -> None:
-        """Test that we can update a database record using `save`"""
+
+@pytest.mark.parametrize(
+    "_backend",
+    [
+        pytest.lazy_fixture("postgres_backend"),
+        pytest.lazy_fixture("memory_backend"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_update_new_record__save(_backend) -> None:
+    """Test that we can update a database record using `save`"""
+    with backend(_backend):
         org_id = str(uuid4())
         serial_id = 101
 
@@ -227,9 +298,18 @@ class TestDatabaseModel:
             # Make sure we delete org so we don't leak out of test
             await org.delete()
 
-    @pytest.mark.asyncio
-    async def test_update_new_record__update_record(self) -> None:
-        """Test that we can update a database record using `update_record`"""
+
+@pytest.mark.parametrize(
+    "_backend",
+    [
+        pytest.lazy_fixture("postgres_backend"),
+        pytest.lazy_fixture("memory_backend"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_update_new_record__update_record(_backend) -> None:
+    """Test that we can update a database record using `update_record`"""
+    with backend(_backend):
         org_id = str(uuid4())
         serial_id = 100000
 
@@ -247,9 +327,18 @@ class TestDatabaseModel:
             # Make sure we delete org so we don't leak out of test
             await org.delete()
 
-    @pytest.mark.asyncio
-    async def test_delete_new_record__delete(self) -> None:
-        """Test that we can delete a database record using `delete`"""
+
+@pytest.mark.parametrize(
+    "_backend",
+    [
+        pytest.lazy_fixture("postgres_backend"),
+        pytest.lazy_fixture("memory_backend"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_delete_new_record__delete(_backend) -> None:
+    """Test that we can delete a database record using `delete`"""
+    with backend(_backend):
         org_id = str(uuid4())
         serial_id = 102
 
@@ -267,9 +356,18 @@ class TestDatabaseModel:
         with pytest.raises(DatabaseRecordNotFound):
             await Org.get(org_id)
 
-    @pytest.mark.asyncio
-    async def test_delete_new_record__delete_records(self) -> None:
-        """Test that we can delete a database record using `delete_records`"""
+
+@pytest.mark.parametrize(
+    "_backend",
+    [
+        pytest.lazy_fixture("postgres_backend"),
+        pytest.lazy_fixture("memory_backend"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_delete_new_record__delete_records(_backend) -> None:
+    """Test that we can delete a database record using `delete_records`"""
+    with backend(_backend):
         org_id = str(uuid4())
         serial_id = 103
 
@@ -285,9 +383,18 @@ class TestDatabaseModel:
         with pytest.raises(DatabaseRecordNotFound):
             await Org.get(org_id)
 
-    @pytest.mark.asyncio
-    async def test_delete_new_record__delete_records_multi_kwargs(self) -> None:
-        """Test that we can delete a database record using `delete_records` with multiple kwargs"""
+
+@pytest.mark.parametrize(
+    "_backend",
+    [
+        pytest.lazy_fixture("postgres_backend"),
+        pytest.lazy_fixture("memory_backend"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_delete_new_record__delete_records_multi_kwargs(_backend) -> None:
+    """Test that we can delete a database record using `delete_records` with multiple kwargs"""
+    with backend(_backend):
         org_id = str(uuid4())
         serial_id = 104
 
@@ -303,23 +410,50 @@ class TestDatabaseModel:
         with pytest.raises(DatabaseRecordNotFound):
             await Org.get(org_id)
 
-    @pytest.mark.asyncio
-    async def test_bad_org_object_creation(self) -> None:
-        """Test that we raise an Exception if the object is missing fields"""
+
+@pytest.mark.parametrize(
+    "_backend",
+    [
+        pytest.lazy_fixture("postgres_backend"),
+        pytest.lazy_fixture("memory_backend"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_bad_org_object_creation(_backend) -> None:
+    """Test that we raise an Exception if the object is missing fields"""
+    with backend(_backend):
         org_id = str(uuid4())
 
         with pytest.raises(ValidationError):
             Org(**{"id": org_id})
 
-    @pytest.mark.asyncio
-    async def test_raise_error_get_list_wrong_field(self) -> None:
-        """Test that we raise an exception if we query for a wrong field on the object"""
+
+@pytest.mark.parametrize(
+    "_backend",
+    [
+        pytest.lazy_fixture("postgres_backend"),
+        pytest.lazy_fixture("memory_backend"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_raise_error_get_list_wrong_field(_backend) -> None:
+    """Test that we raise an exception if we query for a wrong field on the object"""
+    with backend(_backend):
         with pytest.raises(DatabaseModelMissingField):
             await Org.get_list(table_id="Table1")
 
-    @pytest.mark.asyncio
-    async def test_setting_db_managed_columns(self) -> None:
-        """Test that db managed columns get automatically set on save"""
+
+@pytest.mark.parametrize(
+    "_backend",
+    [
+        pytest.lazy_fixture("postgres_backend"),
+        pytest.lazy_fixture("memory_backend"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_setting_db_managed_columns(_backend) -> None:
+    """Test that db managed columns get automatically set on save"""
+    with backend(_backend):
         org = await Org.create(
             id=str(uuid4()), serial_id=105, name="fake_org105", slug="fake_org105"
         )
@@ -336,9 +470,18 @@ class TestDatabaseModel:
         finally:
             await org.delete()
 
-    @pytest.mark.asyncio
-    async def test_fetch(self) -> None:
-        """Test that we can fetch the latest state of a database record"""
+
+@pytest.mark.parametrize(
+    "_backend",
+    [
+        pytest.lazy_fixture("postgres_backend"),
+        pytest.lazy_fixture("memory_backend"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_fetch(_backend) -> None:
+    """Test that we can fetch the latest state of a database record"""
+    with backend(_backend):
         org_id = str(uuid4())
         serial_id = 100
         try:

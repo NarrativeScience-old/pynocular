@@ -25,13 +25,13 @@ from sqlalchemy.sql.elements import BinaryExpression, UnaryExpression
 
 from pynocular.backends.base import DatabaseModelConfig
 from pynocular.backends.context import get_backend
-from pynocular.database_model import UUID_STR
 from pynocular.exceptions import (
     DatabaseModelMisconfigured,
     DatabaseModelMissingField,
     DatabaseRecordNotFound,
     InvalidMethodParameterization,
 )
+from pynocular.uuid_str import UUID_STR
 
 
 class DatabaseModel(BaseModel):
@@ -158,6 +158,7 @@ class DatabaseModel(BaseModel):
         table = Table(table_name, MetaData(), *columns)
 
         return DatabaseModelConfig(
+            fields={**cls.__fields__},
             db_managed_fields=db_managed_fields,
             nested_attr_table_field_map=nested_attr_table_field_map,
             nested_model_attributes=nested_model_attributes,
@@ -178,9 +179,15 @@ class DatabaseModel(BaseModel):
 
     @classmethod
     @property
-    def columns(self) -> ImmutableColumnCollection:
+    def table(cls) -> Table:
+        """Returns SQLAlchemy table object for the model"""
+        return cls._config.table
+
+    @classmethod
+    @property
+    def columns(cls) -> ImmutableColumnCollection:
         """Reference to the model's table's column collection"""
-        return self._config.table.c
+        return cls.table.c
 
     @classmethod
     def from_dict(cls, _dict: Dict[str, Any]) -> "DatabaseModel":
@@ -563,7 +570,7 @@ class DatabaseModel(BaseModel):
         return [
             cls.from_dict(record)
             for record in await get_backend().update_records(
-                where_expressions=where_expressions, values=values
+                cls._config, where_expressions=where_expressions, values=values
             )
         ]
 

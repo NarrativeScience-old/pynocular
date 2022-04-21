@@ -4,6 +4,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Set
 
+from pydantic import Field
 from sqlalchemy import Column, Table
 from sqlalchemy.sql.elements import BinaryExpression, UnaryExpression
 
@@ -15,6 +16,7 @@ class DatabaseModelConfig:
     This class will be instantiated by a database model class at import time.
     """
 
+    fields: Dict[str, Field]
     primary_keys: List[Column]
     db_managed_fields: List[str]
     nested_model_attributes: Set[str]

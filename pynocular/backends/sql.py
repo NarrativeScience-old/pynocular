@@ -62,12 +62,12 @@ class SQLDatabaseModelBackend(DatabaseModelBackend):
                 query = query.limit(limit)
 
             try:
-                records = await self.db.fetch_all(query)
+                result = await self.db.fetch_all(query)
             # The value was the wrong type. This usually happens with UUIDs.
             except InvalidTextRepresentation as e:
                 raise InvalidFieldValue(message=e.diag.message_primary)
 
-            return [dict(record) for record in records]
+            return [dict(record) for record in result]
 
     async def create_records(
         self, config: DatabaseModelConfig, records: List[Dict[str, Any]]
@@ -91,7 +91,7 @@ class SQLDatabaseModelBackend(DatabaseModelBackend):
                 insert(config.table).values(records).returning(config.table)
             )
 
-        return [dict(row) for row in result]
+        return [dict(record) for record in result]
 
     async def delete_records(
         self, config: DatabaseModelConfig, where_expressions: List[BinaryExpression]
@@ -141,12 +141,12 @@ class SQLDatabaseModelBackend(DatabaseModelBackend):
                 .returning(config.table)
             )
             try:
-                results = await self.db.execute(query)
+                result = await self.db.fetch_all(query)
             # The value was the wrong type. This usually happens with UUIDs.
             except InvalidTextRepresentation as e:
                 raise InvalidFieldValue(message=e.diag.message_primary)
 
-            return [dict(record) for record in await results]
+            return [dict(record) for record in result]
 
     async def upsert(
         self,

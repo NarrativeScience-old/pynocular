@@ -1,6 +1,7 @@
 """Contains the MemoryDatabaseModelBackend class"""
 
 from collections import defaultdict
+from datetime import datetime
 import itertools
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
@@ -10,7 +11,7 @@ from sqlalchemy.sql.elements import BinaryExpression, UnaryExpression
 from sqlalchemy.sql.operators import desc_op
 
 from pynocular.backends.base import DatabaseModelBackend, DatabaseModelConfig
-from pynocular.patch_models import _evaluate_column_element
+from pynocular.evaluate_column_element import evaluate_column_element
 
 
 class MemoryDatabaseModelBackend(DatabaseModelBackend):
@@ -63,7 +64,7 @@ class MemoryDatabaseModelBackend(DatabaseModelBackend):
                 record
                 for record in records
                 if all(
-                    _evaluate_column_element(expr, record) for expr in where_expressions
+                    evaluate_column_element(expr, record) for expr in where_expressions
                 )
             ]
 
@@ -129,7 +130,7 @@ class MemoryDatabaseModelBackend(DatabaseModelBackend):
             record
             for record in self.records[config.table.name]
             if not all(
-                _evaluate_column_element(expr, record) for expr in where_expressions
+                evaluate_column_element(expr, record) for expr in where_expressions
             )
         ]
 
@@ -175,19 +176,49 @@ class MemoryDatabaseModelBackend(DatabaseModelBackend):
             the updated record
 
         """
-        if all(
-            record.get(primary_key.name) is not None
+        where_expressions = [
+            primary_key == record.get(primary_key.name)
             for primary_key in config.primary_keys
-        ):
-            # All primary keys are already set so update
-            where_expressions = [
-                primary_key == record.get(primary_key.name)
+        ]
+        existing_records = await self.select(
+            config, where_expressions=where_expressions, limit=1
+        )
+        if (
+            all(
+                record.get(primary_key.name) is not None
                 for primary_key in config.primary_keys
-            ]
+            )
+            and existing_records
+        ):
+            # All primary keys are already set and a record was found so update
+
+            # Set default values for db managed fields
+            for name in config.db_managed_fields:
+                field = config.fields[name]
+                if field.type_ == datetime:
+                    if field.field_info.extra.get("fetch_on_update"):
+                        record[name] = datetime.utcnow()
+                else:
+                    raise NotImplementedError(field.type_)
+
             records = await self.update_records(config, where_expressions, record)
             return records[0]
+
         else:
-            # Primary keys have not been set so this is a new record
+            # Primary keys have not been set or there were no records found, so this is
+            # a new record
+
+            # Set default values for db managed fields
+            for name in config.db_managed_fields:
+                field = config.fields[name]
+                if field.type_ == datetime:
+                    if field.field_info.extra.get(
+                        "fetch_on_create"
+                    ) or field.field_info.extra.get("fetch_on_update"):
+                        record[name] = datetime.utcnow()
+                else:
+                    raise NotImplementedError(field.type_)
+
             for primary_key in config.primary_keys:
                 value = (
                     next(self._pk_generator)
