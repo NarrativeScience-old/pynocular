@@ -27,7 +27,7 @@ class SQLDatabaseModelBackend(DatabaseModelBackend):
         """Initialize a SQLDatabaseModelBackend
 
         Args:
-            db: Database object that has already established a connection
+            db: Database object that has already established a connection pool
 
         """
         self.db = db
@@ -65,22 +65,21 @@ class SQLDatabaseModelBackend(DatabaseModelBackend):
             InvalidFieldValue: The class is missing a database table
 
         """
-        async with self.transaction():
-            query = config.table.select()
-            if where_expressions is not None and len(where_expressions) > 0:
-                query = query.where(and_(*where_expressions))
-            if order_by is not None and len(order_by) > 0:
-                query = query.order_by(*order_by)
-            if limit is not None and limit > 0:
-                query = query.limit(limit)
+        query = config.table.select()
+        if where_expressions is not None and len(where_expressions) > 0:
+            query = query.where(and_(*where_expressions))
+        if order_by is not None and len(order_by) > 0:
+            query = query.order_by(*order_by)
+        if limit is not None and limit > 0:
+            query = query.limit(limit)
 
-            try:
-                result = await self.db.fetch_all(query)
-            # The value was the wrong type. This usually happens with UUIDs.
-            except InvalidTextRepresentation as e:
-                raise InvalidFieldValue(message=e.diag.message_primary)
+        try:
+            result = await self.db.fetch_all(query)
+        # The value was the wrong type. This usually happens with UUIDs.
+        except InvalidTextRepresentation as e:
+            raise InvalidFieldValue(message=e.diag.message_primary)
 
-            return [dict(record) for record in result]
+        return [dict(record) for record in result]
 
     async def create_records(
         self, config: DatabaseModelConfig, records: List[Dict[str, Any]]
