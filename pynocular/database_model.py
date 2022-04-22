@@ -406,12 +406,15 @@ class DatabaseModel(BaseModel):
         return models
 
     @classmethod
-    async def delete_records(cls, **kwargs: Any) -> None:
+    async def delete_records(cls, **kwargs: Any) -> Optional[int]:
         """Execute a DELETE on a DatabaseModel with the provided kwargs
 
         Args:
             kwargs: The filterable key/value pairs for the where clause. These will be
                 `and`ed together
+
+        Returns:
+            number of records deleted (or None if the backend does not support)
 
         Raises:
             DatabaseModelMisconfigured: The class is missing a database table

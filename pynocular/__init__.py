@@ -1,6 +1,6 @@
 """Lightweight ORM that lets you query your database using Pydantic models and asyncio"""
 
-__version__ = "2.0.0rc1"
+__version__ = "2.0.0-rc2"
 
 from pynocular.backends.context import get_backend, set_backend
 from pynocular.backends.memory import MemoryDatabaseModelBackend

@@ -390,6 +390,24 @@ async def test_delete_new_record__delete_records_multi_kwargs(backend) -> None:
     ],
 )
 @pytest.mark.asyncio
+async def test_delete_records__count(backend) -> None:
+    """Should delete records and return deleted count"""
+    with set_backend(backend):
+        for i in range(3):
+            await Org.create(id=str(uuid4()), serial_id=i, name=str(i), slug=str(i))
+
+        count = await Org.delete_records(name="2")
+        assert count == 1
+
+
+@pytest.mark.parametrize(
+    "backend",
+    [
+        pytest.lazy_fixture("postgres_backend"),
+        pytest.lazy_fixture("memory_backend"),
+    ],
+)
+@pytest.mark.asyncio
 async def test_bad_org_object_creation(backend) -> None:
     """Test that we raise an Exception if the object is missing fields"""
     with set_backend(backend):

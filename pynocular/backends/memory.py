@@ -185,7 +185,7 @@ class MemoryDatabaseModelBackend(DatabaseModelBackend):
 
     async def delete_records(
         self, config: DatabaseModelConfig, where_expressions: List[BinaryExpression]
-    ) -> None:
+    ) -> int:
         """Delete a group of records
 
         Args:
@@ -194,7 +194,11 @@ class MemoryDatabaseModelBackend(DatabaseModelBackend):
             where_expressions: A list of BinaryExpressions for the table that will be
                 `and`ed together for the where clause of the backend query
 
+        Returns:
+            number of records deleted
+
         """
+        start_count = len(self.records[config.table.name])
         self.records[config.table.name][:] = [
             record
             for record in self.records[config.table.name]
@@ -202,6 +206,7 @@ class MemoryDatabaseModelBackend(DatabaseModelBackend):
                 evaluate_column_element(expr, record) for expr in where_expressions
             )
         ]
+        return start_count - len(self.records[config.table.name])
 
     async def update_records(
         self,

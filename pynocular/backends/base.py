@@ -91,7 +91,7 @@ class DatabaseModelBackend(ABC):
     @abstractmethod
     async def delete_records(
         self, config: DatabaseModelConfig, where_expressions: List[BinaryExpression]
-    ) -> None:
+    ) -> Optional[int]:
         """Delete a group of records
 
         Args:
@@ -99,6 +99,9 @@ class DatabaseModelBackend(ABC):
                 columns that can be used to build queries suited to the backend.
             where_expressions: A list of BinaryExpressions for the table that will be
                 `and`ed together for the where clause of the backend query
+
+        Returns:
+            number of records deleted (or None if the backend does not support)
 
         """
         pass

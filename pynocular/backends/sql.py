@@ -107,7 +107,7 @@ class SQLDatabaseModelBackend(DatabaseModelBackend):
 
     async def delete_records(
         self, config: DatabaseModelConfig, where_expressions: List[BinaryExpression]
-    ) -> None:
+    ) -> Optional[int]:
         """Delete a group of records
 
         Args:
@@ -116,11 +116,19 @@ class SQLDatabaseModelBackend(DatabaseModelBackend):
             where_expressions: A list of BinaryExpressions for the table that will be
                 `and`ed together for the where clause of the backend query
 
+        Returns:
+            number of records deleted
+
         """
         async with self.transaction():
-            query = config.table.delete().where(and_(*where_expressions))
+            query = (
+                config.table.delete()
+                .where(and_(*where_expressions))
+                .returning(*config.primary_keys)
+            )
             try:
-                await self.db.execute(query)
+                result = await self.db.fetch_all(query)
+                return len(result)
             # The value was the wrong type. This usually happens with UUIDs.
             except InvalidTextRepresentation as e:
                 raise InvalidFieldValue(message=e.diag.message_primary)
