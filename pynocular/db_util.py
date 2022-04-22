@@ -1,15 +1,18 @@
 """Database utility functions"""
 
+from functools import wraps
 import logging
 import re
+from typing import Any, Coroutine
 
-from databases import Database
+from databases.core import Database
 import sqlalchemy as sa
 from sqlalchemy.sql.ddl import CreateTable, DropTable
 
+from pynocular.backends.context import get_backend
 from pynocular.exceptions import InvalidSqlIdentifierErr
 
-logger = logging.getLogger()
+logger = logging.getLogger("pynocular")
 
 
 async def is_database_available(connection_string: str) -> bool:
@@ -65,7 +68,9 @@ async def drop_table(db: Database, table: sa.Table) -> None:
         table: The table to create
 
     """
+    logger.debug(f"Dropping table {table.name}")
     await db.execute(DropTable(table, if_exists=True))
+    logger.debug(f"Dropped table {table.name}")
 
 
 async def setup_datetime_trigger(db: Database) -> None:
@@ -181,3 +186,53 @@ def get_cleaned_db_name(
         raise InvalidSqlIdentifierErr(cleaned_name)
 
     return cleaned_name
+
+
+async def gather(*coros: Coroutine, return_exceptions: bool = False) -> list[Any]:
+    """Helper function to run a collection of coroutines in sequence
+
+    This should be used inside of database transaction instead of asyncio.gather to
+    avoid issues caused by multiple concurrent queries.
+
+    See https://github.com/encode/databases/issues/125#issuecomment-511720013
+
+    Args:
+        return_exceptions: Flag that controls whether exceptions are returned in the
+            list instead of raised immediately. Defaults to False.
+
+    Returns:
+        list of results from executing the coroutines
+
+    """
+    results = []
+    for coro in coros:
+        try:
+            result = await coro
+            results.append(result)
+        except Exception as e:
+            if return_exceptions:
+                results.append(e)
+            else:
+                raise
+
+    return results
+
+
+def transaction(f):
+    """Helper decorator to wrap a function in a database transaction
+
+    Args:
+        f: Function to wrap
+
+    Returns:
+        wrapped function that will execute in a transaction
+
+    """
+
+    @wraps(f)
+    async def wrapper(*args, **kwargs):
+        """Wrapper function"""
+        async with get_backend().transaction():
+            return await f(*args, **kwargs)
+
+    return wrapper

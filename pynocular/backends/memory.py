@@ -29,9 +29,17 @@ class MemoryDatabaseModelBackend(DatabaseModelBackend):
                 in-memory database
 
         """
+        super().__init__()
         self.records = records or defaultdict(list)
         # Serial primary key generator
         self._pk_generator = itertools.count(start=1)
+
+    def transaction(self) -> Any:
+        """Create a new transaction
+
+        This fails as a warning that the in-memory backend does not support transactions.
+        """
+        raise NotImplementedError()
 
     async def select(
         self,

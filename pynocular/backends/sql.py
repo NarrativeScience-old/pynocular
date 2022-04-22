@@ -1,14 +1,18 @@
 """Contains the SQLDatabaseModelBackend class"""
 
+import logging
 from typing import Any, Dict, List, Optional
 
 from databases import Database
+from databases.core import Transaction
 from sqlalchemy import and_
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.sql.elements import BinaryExpression, UnaryExpression
 
 from pynocular.backends.base import DatabaseModelBackend, DatabaseModelConfig
 from pynocular.exceptions import InvalidFieldValue, InvalidTextRepresentation
+
+logger = logging.getLogger("pynocular")
 
 
 class SQLDatabaseModelBackend(DatabaseModelBackend):
@@ -27,6 +31,15 @@ class SQLDatabaseModelBackend(DatabaseModelBackend):
 
         """
         self.db = db
+
+    def transaction(self) -> Transaction:
+        """Create a new transaction
+
+        Returns:
+            new transaction to be used as a context manager
+
+        """
+        return self.db.transaction()
 
     async def select(
         self,
@@ -52,7 +65,7 @@ class SQLDatabaseModelBackend(DatabaseModelBackend):
             InvalidFieldValue: The class is missing a database table
 
         """
-        async with self.db.transaction():
+        async with self.transaction():
             query = config.table.select()
             if where_expressions is not None and len(where_expressions) > 0:
                 query = query.where(and_(*where_expressions))
@@ -86,12 +99,12 @@ class SQLDatabaseModelBackend(DatabaseModelBackend):
         if not records:
             return []
 
-        async with self.db.transaction():
+        async with self.transaction():
             result = await self.db.fetch_all(
                 insert(config.table).values(records).returning(config.table)
             )
 
-        return [dict(record) for record in result]
+            return [dict(record) for record in result]
 
     async def delete_records(
         self, config: DatabaseModelConfig, where_expressions: List[BinaryExpression]
@@ -105,7 +118,7 @@ class SQLDatabaseModelBackend(DatabaseModelBackend):
                 `and`ed together for the where clause of the backend query
 
         """
-        async with self.db.transaction():
+        async with self.transaction():
             query = config.table.delete().where(and_(*where_expressions))
             try:
                 await self.db.execute(query)
@@ -133,7 +146,7 @@ class SQLDatabaseModelBackend(DatabaseModelBackend):
             the updated database records
 
         """
-        async with self.db.transaction():
+        async with self.transaction():
             query = (
                 config.table.update()
                 .where(and_(*where_expressions))
@@ -164,7 +177,8 @@ class SQLDatabaseModelBackend(DatabaseModelBackend):
             the updated record
 
         """
-        async with self.db.transaction():
+        async with self.transaction():
+            logger.debug("Upsert starting")
             query = (
                 insert(config.table)
                 .values(record)
@@ -174,4 +188,5 @@ class SQLDatabaseModelBackend(DatabaseModelBackend):
                 .returning(config.table)
             )
             updated_record = await self.db.fetch_one(query)
+            logger.debug("Upsert complete")
             return dict(updated_record)

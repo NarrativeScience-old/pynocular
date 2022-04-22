@@ -1,11 +1,12 @@
 """Contains contextvar and helper functions to manage the active database backend"""
 
 from contextlib import contextmanager
-
-import aiocontextvars as contextvars
+import contextvars
+import logging
 
 from .base import DatabaseModelBackend
 
+logger = logging.getLogger("pynocular")
 _backend = contextvars.ContextVar("database_model_backend", default=None)
 
 
@@ -17,11 +18,13 @@ def backend(backend: DatabaseModelBackend) -> None:
         backend: Database backend instance
 
     """
+    logger.debug("Setting backend")
     token = _backend.set(backend)
     try:
         yield
     finally:
         _backend.reset(token)
+    logger.debug("Reset backend")
 
 
 def get_backend() -> DatabaseModelBackend:

@@ -1,8 +1,6 @@
 """Tests for DatabaseModel abstract class"""
 from asyncio import gather, sleep
 from datetime import datetime
-import logging
-import os
 from typing import Optional
 from uuid import uuid4
 
@@ -18,63 +16,8 @@ from pynocular import (
     SQLDatabaseModelBackend,
     UUID_STR,
 )
-from pynocular.db_util import (
-    add_datetime_trigger,
-    create_new_database,
-    create_table,
-    drop_table,
-)
+from pynocular.db_util import add_datetime_trigger, create_table, drop_table
 from pynocular.exceptions import DatabaseModelMissingField, DatabaseRecordNotFound
-
-
-@pytest.fixture(scope="module")
-async def postgres_backend():
-    """Fixture that yields a Postgres backend
-
-    Yields:
-        postgres backend
-
-    """
-    db_host = os.environ.get("DB_HOST", "localhost")
-    db_user_name = os.environ.get("DB_USER_NAME", os.environ.get("USER", "postgres"))
-    db_user_password = os.environ.get("DB_USER_PASSWORD", "")
-    test_db_name = os.environ.get("TEST_DB_NAME", "test_db")
-
-    maintenance_connection_string = f"postgres://{db_user_name}:{db_user_password}@{db_host}:5432/postgres?sslmode=disable"
-    db_connection_string = f"postgresql://{db_user_name}:{db_user_password}@{db_host}:5432/{test_db_name}?sslmode=disable"
-
-    try:
-        await create_new_database(maintenance_connection_string, test_db_name)
-    except Exception as e:
-        # If this fails, assume its already created
-        logging.info(str(e))
-
-    async with Database(db_connection_string) as db:
-        await create_table(db, Org.table)
-        await create_table(db, Topic.table)
-        await add_datetime_trigger(db, "organizations")
-        try:
-            yield SQLDatabaseModelBackend(db)
-        finally:
-            await drop_table(db, Topic.table)
-            await drop_table(db, Org.table)
-
-    async with Database(maintenance_connection_string) as db:
-        try:
-            await db.execute(f"DROP DATABASE IF EXISTS {test_db_name}")
-        except Exception as e:
-            logging.info(str(e))
-
-
-@pytest.fixture()
-async def memory_backend():
-    """Fixture that yields an in-memory backend
-
-    Returns:
-        in-memory backend
-
-    """
-    return MemoryDatabaseModelBackend()
 
 
 class Org(DatabaseModel, table_name="organizations"):
@@ -97,6 +40,35 @@ class Topic(DatabaseModel, table_name="topics"):
     filter: Optional[dict] = Field()
     filter_hash: str = Field(max_length=45)
     name: str = Field(max_length=45)
+
+
+@pytest.fixture(scope="module")
+async def postgres_backend(postgres_database: Database):
+    """Fixture that creates tables before yielding a Postgres backend
+
+    Returns:
+        postgres backend
+
+    """
+    await create_table(postgres_database, Org.table)
+    await create_table(postgres_database, Topic.table)
+    await add_datetime_trigger(postgres_database, Org.table.name)
+    try:
+        yield SQLDatabaseModelBackend(postgres_database)
+    finally:
+        await drop_table(postgres_database, Topic.table)
+        await drop_table(postgres_database, Org.table)
+
+
+@pytest.fixture()
+async def memory_backend():
+    """Fixture that yields an in-memory backend
+
+    Returns:
+        in-memory backend
+
+    """
+    return MemoryDatabaseModelBackend()
 
 
 @pytest.mark.parametrize(

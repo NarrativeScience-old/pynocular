@@ -306,22 +306,3 @@ class InvalidSqlIdentifierErr(Exception):
     def __str__(self) -> str:
         """Returns the message describing the exception"""
         return f"Invalid identifier {self.identifier}"
-
-
-class NestedDatabaseModelNotResolved(BaseException):
-    """Indicates a property was accessed before the reference was resolved"""
-
-    def __init__(self, model_cls: str, nested_model_id_value: Any) -> None:
-        """Initialize NestedDatabaseModelNotResolved
-
-        Args:
-            model_cls: The class name of the model that was being referenecd
-            nested_model_id_value: The value of the unique id for this nested model
-
-        """
-        msg = (
-            f"Object {model_cls} with id {nested_model_id_value} was not resolved."
-            f" Please call `fetch()` before trying to access properties of {model_cls}"
-        )
-
-        super().__init__(msg, msg)

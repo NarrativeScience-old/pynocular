@@ -43,6 +43,14 @@ class DatabaseModelBackend(ABC):
     """
 
     @abstractmethod
+    def transaction(self) -> Any:
+        """Create a new transaction
+
+        Not all backends will be able to implement this method.
+        """
+        pass
+
+    @abstractmethod
     async def select(
         self,
         config: DatabaseModelConfig,
