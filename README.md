@@ -14,7 +14,7 @@ Features:
 - Provides simple methods for basic SQLAlchemy support (create, delete, update, read)
 - Contains access to more advanced functionality such as custom SQLAlchemy selects
 - Contains helper functions for creating new database tables
-- Advanced transaction management system allows you to conditionally put requests in transactions
+- Supports automatic and nested transactions
 
 Table of Contents:
 
@@ -28,6 +28,7 @@ Table of Contents:
 - [Advanced Usage](#advanced-usage)
   - [Tables with compound keys](#tables-with-compound-keys)
   - [Batch operations on tables](#batch-operations-on-tables)
+  - [Transactions and asyncio.gather](#transactions-and-asynciogather)
   - [Complex queries](#complex-queries)
   - [Creating database and tables](#creating-database-and-tables)
   - [Unit testing with DatabaseModel](#unit-testing-with-databasemodel)
@@ -233,6 +234,29 @@ await Org.update_record(
 org = await Org.get("05c0060c-ceb8-40f0-8faa-dfb91266a6cf")
 assert org.tag == "blue"
 ```
+
+### Transactions and asyncio.gather
+
+You should avoid using `asyncio.gather` within a database transaction. You can use Pynocular's `gather` function instead, which has the same interface but executes queries sequentially:
+
+```python
+from pynocular import get_backend
+from pynocular.util import gather
+
+async with get_backend().transaction():
+    await gather(
+        Org.create(id="abc", name="foo"),
+        Org.create(id="def", name="bar"),
+    )
+```
+
+The reason is that concurrent queries can interfere with each other and result in the error:
+
+```txt
+asyncpg.exceptions._base.InterfaceError: cannot perform operation: another operation is in progress
+```
+
+See: https://github.com/encode/databases/issues/125#issuecomment-511720013
 
 ### Complex queries
 
