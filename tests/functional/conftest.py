@@ -7,7 +7,7 @@ import os
 from databases import Database
 import pytest
 
-from pynocular.db_util import create_new_database
+from pynocular.util import create_new_database
 
 logger = logging.getLogger("pynocular")
 

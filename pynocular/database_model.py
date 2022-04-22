@@ -31,7 +31,7 @@ from pynocular.exceptions import (
     DatabaseRecordNotFound,
     InvalidMethodParameterization,
 )
-from pynocular.uuid_str import UUID_STR
+from pynocular.util import UUID_STR
 
 
 class DatabaseModel(BaseModel):

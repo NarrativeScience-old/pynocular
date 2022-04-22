@@ -384,7 +384,7 @@ With Pynocular you can use simple python code to create new databases and databa
 (although accessing private variables is not recommended).
 
 ```python
-from pynocular.db_util import create_new_database, create_table
+from pynocular.util import create_new_database, create_table
 
 from my_package import Org, db_info
 

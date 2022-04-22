@@ -11,7 +11,7 @@ _backend = contextvars.ContextVar("database_model_backend", default=None)
 
 
 @contextmanager
-def backend(backend: DatabaseModelBackend) -> None:
+def set_backend(backend: DatabaseModelBackend) -> None:
     """Set the database backend in the aio context
 
     Args:

@@ -3,7 +3,7 @@
 from databases import Database
 import pytest
 
-from pynocular.db_util import is_database_available
+from pynocular.util import is_database_available
 
 
 @pytest.mark.asyncio

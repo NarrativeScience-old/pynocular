@@ -5,7 +5,7 @@ from sqlalchemy import or_
 
 from pynocular.database_model import DatabaseModel
 from pynocular.evaluate_column_element import evaluate_column_element
-from pynocular.uuid_str import UUID_STR
+from pynocular.util import UUID_STR
 
 
 class Org(DatabaseModel, table_name="organizations"):

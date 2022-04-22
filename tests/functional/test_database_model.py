@@ -10,14 +10,13 @@ from pydantic.error_wrappers import ValidationError
 import pytest
 
 from pynocular import (
-    backend,
     DatabaseModel,
     MemoryDatabaseModelBackend,
+    set_backend,
     SQLDatabaseModelBackend,
-    UUID_STR,
 )
-from pynocular.db_util import add_datetime_trigger, create_table, drop_table
 from pynocular.exceptions import DatabaseModelMissingField, DatabaseRecordNotFound
+from pynocular.util import add_datetime_trigger, create_table, drop_table, UUID_STR
 
 
 class Org(DatabaseModel, table_name="organizations"):
@@ -81,7 +80,7 @@ async def memory_backend():
 @pytest.mark.asyncio
 async def test_select(_backend) -> None:
     """Test that we can select the full set of DatabaseModels"""
-    with backend(_backend):
+    with set_backend(_backend):
         try:
             org = await Org.create(
                 id=str(uuid4()),
@@ -105,7 +104,7 @@ async def test_select(_backend) -> None:
 @pytest.mark.asyncio
 async def test_get_list(_backend) -> None:
     """Test that we can get_list and get a subset of DatabaseModels"""
-    with backend(_backend):
+    with set_backend(_backend):
         try:
             org1 = await Org.create(
                 id=str(uuid4()), name="orgus borgus", slug="orgus_borgus", serial_id=1
@@ -138,7 +137,7 @@ async def test_get_list(_backend) -> None:
 @pytest.mark.asyncio
 async def test_get_list__none_filter_value(_backend) -> None:
     """Test that we can get_list based on a None filter value"""
-    with backend(_backend):
+    with set_backend(_backend):
         try:
             test_org = await Org.create(
                 id=uuid4(), name="orgus borgus", slug="orgus_borgus", serial_id=None
@@ -159,7 +158,7 @@ async def test_get_list__none_filter_value(_backend) -> None:
 @pytest.mark.asyncio
 async def test_get_list__none_json_value(_backend) -> None:
     """Test that we can get_list for a None value on a JSON field"""
-    with backend(_backend):
+    with set_backend(_backend):
         # The None value will be persisted as a SQL NULL value rather than a JSON-encoded
         # null value when the Topic is created, so the filter value None will work here
         try:
@@ -186,7 +185,7 @@ async def test_get_list__none_json_value(_backend) -> None:
 @pytest.mark.asyncio
 async def test_create_new_record(_backend) -> None:
     """Test that we can create a database record"""
-    with backend(_backend):
+    with set_backend(_backend):
         org_id = str(uuid4())
         serial_id = 100
         try:
@@ -210,7 +209,7 @@ async def test_create_new_record(_backend) -> None:
 @pytest.mark.asyncio
 async def test_create_list(_backend) -> None:
     """Test that we can create a list of database records"""
-    with backend(_backend):
+    with set_backend(_backend):
         try:
             initial_orgs = [
                 Org(id=str(uuid4()), name="fake org 1", slug="fake-slug-1"),
@@ -235,7 +234,7 @@ async def test_create_list(_backend) -> None:
 @pytest.mark.asyncio
 async def test_create_list__empty(_backend) -> None:
     """Should return empty list for input of empty list"""
-    with backend(_backend):
+    with set_backend(_backend):
         created_orgs = await Org.create_list([])
         assert created_orgs == []
 
@@ -250,7 +249,7 @@ async def test_create_list__empty(_backend) -> None:
 @pytest.mark.asyncio
 async def test_update_new_record__save(_backend) -> None:
     """Test that we can update a database record using `save`"""
-    with backend(_backend):
+    with set_backend(_backend):
         org_id = str(uuid4())
         serial_id = 101
 
@@ -281,7 +280,7 @@ async def test_update_new_record__save(_backend) -> None:
 @pytest.mark.asyncio
 async def test_update_new_record__update_record(_backend) -> None:
     """Test that we can update a database record using `update_record`"""
-    with backend(_backend):
+    with set_backend(_backend):
         org_id = str(uuid4())
         serial_id = 100000
 
@@ -310,7 +309,7 @@ async def test_update_new_record__update_record(_backend) -> None:
 @pytest.mark.asyncio
 async def test_delete_new_record__delete(_backend) -> None:
     """Test that we can delete a database record using `delete`"""
-    with backend(_backend):
+    with set_backend(_backend):
         org_id = str(uuid4())
         serial_id = 102
 
@@ -339,7 +338,7 @@ async def test_delete_new_record__delete(_backend) -> None:
 @pytest.mark.asyncio
 async def test_delete_new_record__delete_records(_backend) -> None:
     """Test that we can delete a database record using `delete_records`"""
-    with backend(_backend):
+    with set_backend(_backend):
         org_id = str(uuid4())
         serial_id = 103
 
@@ -366,7 +365,7 @@ async def test_delete_new_record__delete_records(_backend) -> None:
 @pytest.mark.asyncio
 async def test_delete_new_record__delete_records_multi_kwargs(_backend) -> None:
     """Test that we can delete a database record using `delete_records` with multiple kwargs"""
-    with backend(_backend):
+    with set_backend(_backend):
         org_id = str(uuid4())
         serial_id = 104
 
@@ -393,7 +392,7 @@ async def test_delete_new_record__delete_records_multi_kwargs(_backend) -> None:
 @pytest.mark.asyncio
 async def test_bad_org_object_creation(_backend) -> None:
     """Test that we raise an Exception if the object is missing fields"""
-    with backend(_backend):
+    with set_backend(_backend):
         org_id = str(uuid4())
 
         with pytest.raises(ValidationError):
@@ -410,7 +409,7 @@ async def test_bad_org_object_creation(_backend) -> None:
 @pytest.mark.asyncio
 async def test_raise_error_get_list_wrong_field(_backend) -> None:
     """Test that we raise an exception if we query for a wrong field on the object"""
-    with backend(_backend):
+    with set_backend(_backend):
         with pytest.raises(DatabaseModelMissingField):
             await Org.get_list(table_id="Table1")
 
@@ -425,7 +424,7 @@ async def test_raise_error_get_list_wrong_field(_backend) -> None:
 @pytest.mark.asyncio
 async def test_setting_db_managed_columns(_backend) -> None:
     """Test that db managed columns get automatically set on save"""
-    with backend(_backend):
+    with set_backend(_backend):
         org = await Org.create(
             id=str(uuid4()), serial_id=105, name="fake_org105", slug="fake_org105"
         )
@@ -453,7 +452,7 @@ async def test_setting_db_managed_columns(_backend) -> None:
 @pytest.mark.asyncio
 async def test_fetch(_backend) -> None:
     """Test that we can fetch the latest state of a database record"""
-    with backend(_backend):
+    with set_backend(_backend):
         org_id = str(uuid4())
         serial_id = 100
         try:
