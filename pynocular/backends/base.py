@@ -19,9 +19,6 @@ class DatabaseModelConfig:
     fields: Dict[str, Field]
     primary_keys: List[Column]
     db_managed_fields: List[str]
-    nested_model_attributes: Set[str]
-    nested_attr_table_field_map: Dict[str, str]
-    nested_table_field_attr_map: Dict[str, str]
     table: Table
 
     @property

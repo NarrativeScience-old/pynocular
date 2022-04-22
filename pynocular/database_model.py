@@ -1,9 +1,8 @@
 """Contains DatabaseModel class"""
 
-import asyncio
 from datetime import datetime
 from enum import Enum, EnumMeta
-from typing import Any, Dict, List, Optional, Sequence, Set, TYPE_CHECKING
+from typing import Any, Dict, List, Optional, Sequence, TYPE_CHECKING
 from uuid import UUID as stdlib_uuid
 
 from pydantic import BaseModel, PositiveFloat, PositiveInt, UUID4
@@ -72,18 +71,6 @@ class DatabaseModel(BaseModel):
         # These are the server_default and server_onupdate functions in SQLAlchemy
         db_managed_fields: List[str] = []
 
-        # The following tables track which attributes on the model are nested model
-        # references
-        # Some nested model attributes may have different names than their actual db table;
-        # For example; on an App we may have an `org` attribute but the db field is
-        # `organzation_id`
-
-        # In order to manage this we also need maps from attribute name to table_field_name
-        # and back
-        nested_model_attributes: Set[str] = set()
-        nested_attr_table_field_map: Dict[str, str] = {}
-        nested_table_field_attr_map: Dict[str, str] = {}
-
         columns: List[Column] = []
         for field in cls.__fields__.values():
             name = field.name
@@ -119,17 +106,6 @@ class DatabaseModel(BaseModel):
                 type = sqlalchemy_uuid()
             elif field.type_ is datetime:
                 type = TIMESTAMP(timezone=True)
-            elif field.type_.__name__ == "NestedModel":
-                nested_model_attributes.add(name)
-                # If the field name on the NestedModel type is not None, use that for the
-                # column name
-                if field.type_.reference_field_name is not None:
-                    nested_attr_table_field_map[name] = field.type_.reference_field_name
-                    nested_table_field_attr_map[field.type_.reference_field_name] = name
-                    name = field.type_.reference_field_name
-
-                # Assume all IDs are UUIDs for now
-                type = sqlalchemy_uuid()
             # TODO - how are people using this today? Is there a class we need to make or can we reuse one
             # elif field.type_ is bit:
             #     type = Bit
@@ -160,9 +136,6 @@ class DatabaseModel(BaseModel):
         return DatabaseModelConfig(
             fields={**cls.__fields__},
             db_managed_fields=db_managed_fields,
-            nested_attr_table_field_map=nested_attr_table_field_map,
-            nested_model_attributes=nested_model_attributes,
-            nested_table_field_attr_map=nested_table_field_attr_map,
             primary_keys=primary_keys,
             table=table,
         )
@@ -204,11 +177,7 @@ class DatabaseModel(BaseModel):
             The DatabaseModel object
 
         """
-        modified_dict = {}
-        for key, value in _dict.items():
-            modified_key = cls._config.nested_table_field_attr_map.get(key, key)
-            modified_dict[modified_key] = value
-        return cls(**modified_dict)
+        return cls(**_dict)
 
     def to_dict(
         self, serialize: bool = False, include_keys: Optional[Sequence] = None
@@ -238,42 +207,10 @@ class DatabaseModel(BaseModel):
                 if isinstance(prop_value, Enum):
                     prop_value = prop_value.name
 
-            if prop_name in self._config.nested_model_attributes:
-                # self.dict() will serialize any BaseModels into a dict so fetch the
-                # actual object from self
-                temp_prop_value = getattr(self, prop_name)
-                prop_name = self._config.nested_attr_table_field_map.get(
-                    prop_name, prop_name
-                )
-                # temp_prop_value can be `None` if the nested key is optional
-                if temp_prop_value is not None:
-                    prop_value = temp_prop_value.get_primary_id()
-
             if not include_keys or prop_name in include_keys:
                 _dict[prop_name] = prop_value
 
         return _dict
-
-    @classmethod
-    async def get_with_refs(cls, *args: Any, **kwargs: Any) -> "DatabaseModel":
-        """Gets the DatabaseModel associated with any nested key references resolved
-
-        Args:
-            args: The column id for the object's primary key
-            kwargs: The columns and ids that make up the object's composite primary key
-
-        Returns:
-            A DatabaseModel object representing the record in the db if one exists
-
-        """
-        obj = await cls.get(*args, **kwargs)
-        gatherables = [
-            (getattr(obj, prop_name)).fetch()
-            for prop_name in cls._config.nested_model_attributes
-        ]
-        await asyncio.gather(*gatherables)
-
-        return obj
 
     @classmethod
     async def get(cls, *args: Any, **kwargs: Any) -> "DatabaseModel":
@@ -349,22 +286,13 @@ class DatabaseModel(BaseModel):
 
         return getattr(self, self._config.primary_keys[0].name)
 
-    async def fetch(self, resolve_references: bool = False) -> None:
-        """Gets the latest of the object from the database and updates itself
-
-        Args:
-            resolve_references: If True, resolve any nested key references
-
-        """
-        # Get the latest version of self
+    async def fetch(self) -> None:
+        """Gets the latest of the object from the database and updates itself"""
         get_params = {
             primary_key.name: getattr(self, primary_key.name)
             for primary_key in self._config.primary_keys
         }
-        if resolve_references:
-            new_self = await self.get_with_refs(**get_params)
-        else:
-            new_self = await self.get(**get_params)
+        new_self = await self.get(**get_params)
 
         for attr_name, new_attr_val in new_self.dict().items():
             setattr(self, attr_name, new_attr_val)
@@ -388,14 +316,10 @@ class DatabaseModel(BaseModel):
         """
         where_expressions = []
         for field_name, db_field_value in kwargs.items():
-            db_field_name = cls._config.nested_attr_table_field_map.get(
-                field_name, field_name
-            )
-
             try:
-                db_field = getattr(cls._config.table.c, db_field_name)
+                db_field = getattr(cls._config.table.c, field_name)
             except AttributeError:
-                raise DatabaseModelMissingField(cls.__name__, db_field_name)
+                raise DatabaseModelMissingField(cls.__name__, field_name)
 
             if isinstance(db_field_value, list):
                 exp = db_field.in_(db_field_value)
@@ -497,14 +421,10 @@ class DatabaseModel(BaseModel):
         """
         where_expressions = []
         for field_name, db_field_value in kwargs.items():
-            db_field_name = cls._config.nested_attr_table_field_map.get(
-                field_name, field_name
-            )
-
             try:
-                db_field = getattr(cls._config.table.c, db_field_name)
+                db_field = getattr(cls._config.table.c, field_name)
             except AttributeError:
-                raise DatabaseModelMissingField(cls.__name__, db_field_name)
+                raise DatabaseModelMissingField(cls.__name__, field_name)
 
             if isinstance(db_field_value, list):
                 exp = db_field.in_(db_field_value)
@@ -536,14 +456,7 @@ class DatabaseModel(BaseModel):
             where_expressions.append(primary_key == primary_key_value)
             primary_key_dict[primary_key.name] = primary_key_value
 
-        modified_kwargs = {}
-        for field_name, value in kwargs.items():
-            db_field_name = cls._config.nested_attr_table_field_map.get(
-                field_name, field_name
-            )
-            modified_kwargs[db_field_name] = value
-
-        updated_records = await cls.update(where_expressions, modified_kwargs)
+        updated_records = await cls.update(where_expressions, kwargs)
         if len(updated_records) == 0:
             raise DatabaseRecordNotFound(cls._config.table.name, **primary_key_dict)
         return updated_records[0]
