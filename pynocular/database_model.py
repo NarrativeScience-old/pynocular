@@ -97,7 +97,9 @@ class DatabaseModel(BaseModel):
             ):
                 type = Float
             elif field.type_.__class__ == EnumMeta:
-                type = SQLEnum(field.type_)
+                type = SQLEnum(
+                    field.type_, values_callable=lambda obj: [e.value for e in obj]
+                )
             elif field.type_ is bool:
                 type = Boolean
             elif field.type_ in (dict, Dict):
