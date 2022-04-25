@@ -12,6 +12,7 @@ from sqlalchemy.sql.operators import desc_op
 
 from pynocular.backends.base import DatabaseModelBackend, DatabaseModelConfig
 from pynocular.evaluate_column_element import evaluate_column_element
+from pynocular.util import UUID_STR
 
 
 class MemoryDatabaseModelBackend(DatabaseModelBackend):
@@ -22,7 +23,7 @@ class MemoryDatabaseModelBackend(DatabaseModelBackend):
     """
 
     def __init__(self, records: Optional[Dict[str, List[Dict[str, Any]]]] = None):
-        """Initialize a SQLDatabaseModelBackend
+        """Initialize a MemoryDatabaseModelBackend
 
         Args:
             records: Optional map of table name to list of records to bootstrap the
@@ -88,11 +89,15 @@ class MemoryDatabaseModelBackend(DatabaseModelBackend):
         """
         for name in config.db_managed_fields:
             field = config.fields[name]
-            if (fetch_on_create and field.field_info.extra.get("fetch_on_create")) or (
-                fetch_on_update and field.field_info.extra.get("fetch_on_update")
-            ):
+            if (
+                fetch_on_create
+                and field.field_info.extra.get("fetch_on_create")
+                and record.get(name) is None
+            ) or (fetch_on_update and field.field_info.extra.get("fetch_on_update")):
                 if field.type_ == datetime:
                     record[name] = datetime.utcnow()
+                elif field.type_ == UUID_STR:
+                    record[name] = str(uuid4())
                 else:
                     raise NotImplementedError(field.type_)
 

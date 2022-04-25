@@ -14,6 +14,7 @@ from sqlalchemy import (
     Integer,
     MetaData,
     Table,
+    text,
     TIMESTAMP,
     VARCHAR,
 )
@@ -114,17 +115,27 @@ class DatabaseModel(BaseModel):
             else:
                 raise DatabaseModelMisconfigured(f"Unsupported type {field.type_}")
 
-            column = Column(
-                name, type, primary_key=is_primary_key, nullable=is_nullable
-            )
-
+            server_default = None
             if fetch_on_create:
-                column.server_default = FetchedValue()
+                if field.type_ in (UUID4, stdlib_uuid, UUID_STR):
+                    server_default = text("uuid_generate_v4()")
+                else:
+                    server_default = FetchedValue()
                 db_managed_fields.append(name)
 
+            server_onupdate = None
             if fetch_on_update:
-                column.server_onupdate = FetchedValue()
+                server_onupdate = FetchedValue()
                 db_managed_fields.append(name)
+
+            column = Column(
+                name,
+                type,
+                primary_key=is_primary_key,
+                nullable=is_nullable,
+                server_default=server_default,
+                server_onupdate=server_onupdate,
+            )
 
             if is_primary_key:
                 primary_keys.append(column)
@@ -386,7 +397,7 @@ class DatabaseModel(BaseModel):
             # Remove keys for primary keys that don't have a value. This indicates that
             # the backend will generate new values.
             for field in cls._config.primary_keys:
-                if dict_obj.get(field.name) is None:
+                if field.name in dict_obj and dict_obj[field.name] is None:
                     del dict_obj[field.name]
 
             values.append(dict_obj)
@@ -507,7 +518,12 @@ class DatabaseModel(BaseModel):
             dict_self,
         )
         for field in self._config.db_managed_fields:
-            setattr(self, field, record[field])
+            existing_value = getattr(self, field, None)
+            column: Column = self._config.table.c[field]
+            if (
+                column.server_default is not None and existing_value is None
+            ) or column.server_default is None:
+                setattr(self, field, record[field])
 
     async def delete(self) -> None:
         """Delete this record from the database"""

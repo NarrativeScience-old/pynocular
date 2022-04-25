@@ -7,7 +7,7 @@ import os
 from databases import Database
 import pytest
 
-from pynocular.util import create_new_database
+from pynocular.util import create_new_database, setup_uuid
 
 logger = logging.getLogger("pynocular")
 
@@ -42,6 +42,7 @@ async def postgres_database():
 
     database = Database(db_connection_string, timeout=5, command_timeout=5)
     await database.connect()
+    await setup_uuid(database)
     try:
         yield database
     except Exception as e:

@@ -113,6 +113,16 @@ async def drop_table(db: Database, table: sa.Table) -> None:
     logger.debug(f"Dropped table {table.name}")
 
 
+async def setup_uuid(db: Database) -> None:
+    """Set up UUID support
+
+    Args:
+        db: an async database connection
+
+    """
+    await db.execute('CREATE EXTENSION IF NOT EXISTS "uuid-ossp";')
+
+
 async def setup_datetime_trigger(db: Database) -> None:
     """Set up created_at/updated_at datetime trigger
 
@@ -120,7 +130,6 @@ async def setup_datetime_trigger(db: Database) -> None:
         db: an async database connection
 
     """
-    await db.execute('CREATE EXTENSION IF NOT EXISTS "uuid-ossp";')
     await db.execute('CREATE EXTENSION IF NOT EXISTS "plpgsql";')
     await db.execute(
         """

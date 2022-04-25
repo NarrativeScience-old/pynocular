@@ -22,7 +22,7 @@ from pynocular.util import add_datetime_trigger, create_table, drop_table, UUID_
 class Org(DatabaseModel, table_name="organizations"):
     """A test database model"""
 
-    id: UUID_STR = Field(primary_key=True)
+    id: Optional[UUID_STR] = Field(primary_key=True, fetch_on_create=True)
     serial_id: Optional[int]
     name: str = Field(max_length=45)
     slug: str = Field(max_length=45)
@@ -443,9 +443,7 @@ async def test_raise_error_get_list_wrong_field(backend) -> None:
 async def test_setting_db_managed_columns(backend) -> None:
     """Test that db managed columns get automatically set on save"""
     with set_backend(backend):
-        org = await Org.create(
-            id=str(uuid4()), serial_id=105, name="fake_org105", slug="fake_org105"
-        )
+        org = await Org.create(serial_id=105, name="fake_org105", slug="fake_org105")
 
         try:
             assert org.created_at is not None
