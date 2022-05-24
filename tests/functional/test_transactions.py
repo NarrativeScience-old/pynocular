@@ -26,6 +26,9 @@ class Org(DatabaseModel, table_name="organizations"):
 async def postgres_backend(postgres_database: Database):
     """Fixture that creates tables before yielding a Postgres backend
 
+    Args:
+        postgres_database: Postgres database instance
+
     Returns:
         postgres backend
 
