@@ -7,6 +7,7 @@ from pydantic import Field
 import pytest
 
 from pynocular.backends.context import get_backend, set_backend
+from pynocular.backends.memory import MemoryDatabaseModelBackend
 from pynocular.backends.sql import SQLDatabaseModelBackend
 from pynocular.database_model import DatabaseModel, UUID_STR
 from pynocular.util import create_table, drop_table, gather, transaction
@@ -36,11 +37,29 @@ async def postgres_backend(postgres_database: Database):
         await drop_table(postgres_database, Org.table)
 
 
+@pytest.fixture()
+async def memory_backend():
+    """Fixture that yields an in-memory backend
+
+    Returns:
+        in-memory backend
+
+    """
+    return MemoryDatabaseModelBackend()
+
+
+@pytest.mark.parametrize(
+    "backend",
+    [
+        pytest.lazy_fixture("postgres_backend"),
+        pytest.lazy_fixture("memory_backend"),
+    ],
+)
 @pytest.mark.asyncio
-async def test_gathered_creates(postgres_backend) -> None:
+async def test_gathered_creates(backend) -> None:
     """Test that we can update the db multiple times in a gather under a single transaction"""
-    with set_backend(postgres_backend):
-        async with get_backend().db.transaction():
+    with set_backend(backend):
+        async with get_backend().transaction():
             await gather(
                 Org.create(id=str(uuid4()), name="orgus borgus"),
                 Org.create(id=str(uuid4()), name="porgus orgus"),
@@ -50,10 +69,17 @@ async def test_gathered_creates(postgres_backend) -> None:
         assert len(all_orgs) == 2
 
 
+@pytest.mark.parametrize(
+    "backend",
+    [
+        pytest.lazy_fixture("postgres_backend"),
+        pytest.lazy_fixture("memory_backend"),
+    ],
+)
 @pytest.mark.asyncio
-async def test_gathered_updates_raise_error(postgres_backend) -> None:
+async def test_gathered_updates_raise_error(backend) -> None:
     """Test that an error in one update rolls back the other when gathered"""
-    with set_backend(postgres_backend):
+    with set_backend(backend):
         try:
             async with get_backend().transaction():
                 await gather(
@@ -68,10 +94,17 @@ async def test_gathered_updates_raise_error(postgres_backend) -> None:
         assert len(all_orgs) == 0
 
 
+@pytest.mark.parametrize(
+    "backend",
+    [
+        pytest.lazy_fixture("postgres_backend"),
+        pytest.lazy_fixture("memory_backend"),
+    ],
+)
 @pytest.mark.asyncio
-async def test_serial_updates(postgres_backend) -> None:
+async def test_serial_updates(backend) -> None:
     """Test that we can update the db serially under a single transaction"""
-    with set_backend(postgres_backend):
+    with set_backend(backend):
         async with get_backend().transaction():
             await Org.create(id=str(uuid4()), name="orgus borgus")
             await Org.create(id=str(uuid4()), name="porgus orgus")
@@ -80,10 +113,17 @@ async def test_serial_updates(postgres_backend) -> None:
         assert len(all_orgs) == 2
 
 
+@pytest.mark.parametrize(
+    "backend",
+    [
+        pytest.lazy_fixture("postgres_backend"),
+        pytest.lazy_fixture("memory_backend"),
+    ],
+)
 @pytest.mark.asyncio
-async def test_serial_updates_raise_error(postgres_backend) -> None:
+async def test_serial_updates_raise_error(backend) -> None:
     """Test that an error in one update rolls back the other when run serially"""
-    with set_backend(postgres_backend):
+    with set_backend(backend):
         try:
             async with get_backend().transaction():
                 await Org.create(id=str(uuid4()), name="orgus borgus")
@@ -95,10 +135,17 @@ async def test_serial_updates_raise_error(postgres_backend) -> None:
         assert len(all_orgs) == 0
 
 
+@pytest.mark.parametrize(
+    "backend",
+    [
+        pytest.lazy_fixture("postgres_backend"),
+        pytest.lazy_fixture("memory_backend"),
+    ],
+)
 @pytest.mark.asyncio
-async def test_nested_updates(postgres_backend) -> None:
+async def test_nested_updates(backend) -> None:
     """Test that we can perform nested update on the db under a single transaction"""
-    with set_backend(postgres_backend):
+    with set_backend(backend):
         async with get_backend().transaction():
             await Org.create(id=str(uuid4()), name="orgus borgus")
 
@@ -109,10 +156,17 @@ async def test_nested_updates(postgres_backend) -> None:
         assert len(all_orgs) == 2
 
 
+@pytest.mark.parametrize(
+    "backend",
+    [
+        pytest.lazy_fixture("postgres_backend"),
+        pytest.lazy_fixture("memory_backend"),
+    ],
+)
 @pytest.mark.asyncio
-async def test_nested_updates_raise_error(postgres_backend) -> None:
+async def test_nested_updates_raise_error(backend) -> None:
     """Test that an error in one update rolls back the other when it is nested"""
-    with set_backend(postgres_backend):
+    with set_backend(backend):
         try:
             async with get_backend().transaction():
                 await Org.create(id=str(uuid4()), name="orgus borgus")
@@ -127,10 +181,17 @@ async def test_nested_updates_raise_error(postgres_backend) -> None:
         assert len(all_orgs) == 0
 
 
+@pytest.mark.parametrize(
+    "backend",
+    [
+        pytest.lazy_fixture("postgres_backend"),
+        pytest.lazy_fixture("memory_backend"),
+    ],
+)
 @pytest.mark.asyncio
-async def test_nested_conditional_updates_raise_error(postgres_backend) -> None:
+async def test_nested_conditional_updates_raise_error(backend) -> None:
     """Test that an error in one update rolls back the other even if its a conditional transaction"""
-    with set_backend(postgres_backend):
+    with set_backend(backend):
         try:
             async with get_backend().transaction():
                 await Org.create(id=str(uuid4()), name="orgus borgus")
@@ -145,10 +206,17 @@ async def test_nested_conditional_updates_raise_error(postgres_backend) -> None:
         assert len(all_orgs) == 0
 
 
+@pytest.mark.parametrize(
+    "backend",
+    [
+        pytest.lazy_fixture("postgres_backend"),
+        pytest.lazy_fixture("memory_backend"),
+    ],
+)
 @pytest.mark.asyncio
-async def test_open_transaction_decorator(postgres_backend) -> None:
+async def test_open_transaction_decorator(backend) -> None:
     """Test that the open_transaction decorator will execute everything in a transaction"""
-    with set_backend(postgres_backend):
+    with set_backend(backend):
 
         @transaction
         async def write_than_raise_error():
@@ -164,10 +232,17 @@ async def test_open_transaction_decorator(postgres_backend) -> None:
         assert len(all_orgs) == 2
 
 
+@pytest.mark.parametrize(
+    "backend",
+    [
+        pytest.lazy_fixture("postgres_backend"),
+        pytest.lazy_fixture("memory_backend"),
+    ],
+)
 @pytest.mark.asyncio
-async def test_open_transaction_decorator_rolls_back(postgres_backend) -> None:
+async def test_open_transaction_decorator_rolls_back(backend) -> None:
     """Test that the open_transaction decorator will roll back everything in the function"""
-    with set_backend(postgres_backend):
+    with set_backend(backend):
 
         @transaction
         async def write_than_raise_error():
