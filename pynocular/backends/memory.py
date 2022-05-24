@@ -1,9 +1,13 @@
 """Contains the MemoryDatabaseModelBackend class"""
 
+import asyncio
 from collections import defaultdict
+from copy import deepcopy
 from datetime import datetime
+import functools
 import itertools
-from typing import Any, Dict, List, Optional
+from types import TracebackType
+from typing import Any, Callable, Dict, Generator, List, Optional, Type
 from uuid import uuid4
 
 from sqlalchemy import Integer
@@ -13,6 +17,114 @@ from sqlalchemy.sql.operators import desc_op
 from pynocular.backends.base import DatabaseModelBackend, DatabaseModelConfig
 from pynocular.evaluate_column_element import evaluate_column_element
 from pynocular.util import UUID_STR
+
+
+class MemoryConnection:
+    """In-memory connection
+
+    This mirrors the databases library implementation.
+    """
+
+    def __init__(
+        self, records: Optional[Dict[str, List[Dict[str, Any]]]] = None
+    ) -> None:
+        """In-memory connection
+
+        Args:
+            records: Optional map of table name to list of records to bootstrap the
+                in-memory database
+
+        """
+        self.records = records or defaultdict(list)
+        self._tmp_records = None
+        self._transaction_lock = asyncio.Lock()
+        self._transaction_stack: list[MemoryTransaction] = []
+
+    def backup_records(self) -> None:
+        """Backup the records in the connection to a temporary variable"""
+        self._tmp_records = deepcopy(self.records)
+
+    def clear_backup(self) -> None:
+        """Clear the backup"""
+        self._tmp_records = None
+
+    def restore_records(self) -> None:
+        """Restore the original copy of records"""
+        self.records = deepcopy(self._tmp_records)
+
+
+class MemoryTransaction:
+    """In-memory transaction
+
+    This mirrors the databases library implementation.
+    """
+
+    def __init__(self, connection: MemoryConnection) -> None:
+        """In-memory transaction
+
+        Args:
+            connection: Connection instance containing records
+
+        """
+        self._connection = connection
+
+    async def __aenter__(self) -> "MemoryTransaction":
+        """Called when entering `async with database.transaction()`"""
+        await self.start()
+        return self
+
+    async def __aexit__(
+        self,
+        exc_type: Type[BaseException] = None,
+        exc_value: BaseException = None,
+        traceback: TracebackType = None,
+    ) -> None:
+        """Called when exiting `async with database.transaction()`"""
+        if exc_type is not None:
+            await self.rollback()
+        else:
+            await self.commit()
+
+    def __await__(self) -> Generator:
+        """Called if using the low-level `transaction = await database.transaction()`"""
+        return self.start().__await__()
+
+    def __call__(self, func: Callable) -> Callable:
+        """Called if using `@database.transaction()` as a decorator."""
+
+        @functools.wraps(func)
+        async def wrapper(*args: Any, **kwargs: Any) -> Any:
+            async with self:
+                return await func(*args, **kwargs)
+
+        return wrapper
+
+    async def start(self) -> "MemoryTransaction":
+        """Start a transaction"""
+        async with self._connection._transaction_lock:
+            is_root = not self._connection._transaction_stack
+            if is_root:
+                self._connection.backup_records()
+            self._connection._transaction_stack.append(self)
+        return self
+
+    async def commit(self) -> None:
+        """Commit the transaction on success"""
+        async with self._connection._transaction_lock:
+            assert self._connection._transaction_stack[-1] is self
+            self._connection._transaction_stack.pop()
+            is_root = not self._connection._transaction_stack
+            if is_root:
+                self._connection.clear_backup()
+
+    async def rollback(self) -> None:
+        """Rollback the transaction in case of failure"""
+        async with self._connection._transaction_lock:
+            assert self._connection._transaction_stack[-1] is self
+            self._connection._transaction_stack.pop()
+            is_root = not self._connection._transaction_stack
+            if is_root:
+                self._connection.restore_records()
 
 
 class MemoryDatabaseModelBackend(DatabaseModelBackend):
@@ -31,9 +143,15 @@ class MemoryDatabaseModelBackend(DatabaseModelBackend):
 
         """
         super().__init__()
-        self.records = records or defaultdict(list)
+        # Create a "connection" to hold records and interface with transactions
+        self._connection = MemoryConnection(records)
         # Serial primary key generator
         self._pk_generator = itertools.count(start=1)
+
+    @property
+    def records(self) -> Dict[str, List[Dict[str, Any]]]:
+        """Map of table name to list of records"""
+        return self._connection.records
 
     def _set_primary_key_values(
         self,
@@ -103,12 +221,9 @@ class MemoryDatabaseModelBackend(DatabaseModelBackend):
 
         return record
 
-    def transaction(self) -> Any:
-        """Create a new transaction
-
-        This fails as a warning that the in-memory backend does not support transactions.
-        """
-        raise NotImplementedError()
+    def transaction(self) -> MemoryTransaction:
+        """Create a new transaction"""
+        return MemoryTransaction(self._connection)
 
     async def select(
         self,
