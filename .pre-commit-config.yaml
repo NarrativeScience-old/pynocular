@@ -35,6 +35,23 @@ repos:
         # Need to define stages explicitly since `default_stages` was not being respected
         stages: [commit]
 
+  - repo: https://github.com/lk16/detect-missing-init
+    rev: v0.1.4
+    hooks:
+      - id: detect-missing-init
+        args: [--create, --track]
+
+  - repo: https://github.com/bgimby-ns/pydocstyle
+    rev: 305f311b
+    hooks:
+      - id: pydocstyle
+        name: Lint Python docstrings (pydocstyle)
+        exclude: >
+          (?x)^(
+            .*__init__.py$|
+            .*setup.py$
+          )$
+
   - repo: local
     hooks:
       - id: codespell

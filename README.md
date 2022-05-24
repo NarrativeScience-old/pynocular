@@ -4,30 +4,39 @@
 
 Pynocular is a lightweight ORM that lets you query your database using Pydantic models and asyncio.
 
-With Pynocular you can decorate your existing Pydantic models to sync them with the corresponding table in your
+With Pynocular, you can annotate your existing Pydantic models to sync them with the corresponding table in your
 database, allowing you to persist changes without ever having to think about the database. Transaction management is
 automatically handled for you so you can focus on the important parts of your code. This integrates seamlessly with frameworks that use Pydantic models such as FastAPI.
 
 Features:
 
-- Fully supports asyncio to write to SQL databases
+- Fully supports asyncio to write to SQL databases through the [databases](https://www.encode.io/databases/) library
 - Provides simple methods for basic SQLAlchemy support (create, delete, update, read)
 - Contains access to more advanced functionality such as custom SQLAlchemy selects
 - Contains helper functions for creating new database tables
-- Advanced transaction management system allows you to conditionally put requests in transactions
+- Supports automatic and nested transactions
 
 Table of Contents:
 
 - [Installation](#installation)
-- [Guide](#guide)
-  - [Basic Usage](#basic-usage)
-  - [Advanced Usage](#advanced-usage)
-  - [Creating database tables](#creating-database-tables)
+- [Basic Usage](#basic-usage)
+  - [Defining models](#defining-models)
+  - [Creating a database and setting the backend](#creating-a-database-and-setting-the-backend)
+  - [Creating, reading, updating, and deleting database objects](#creating-reading-updating-and-deleting-database-objects)
+  - [Serialization](#serialization)
+  - [Special type arguments](#special-type-arguments)
+- [Advanced Usage](#advanced-usage)
+  - [Tables with compound keys](#tables-with-compound-keys)
+  - [Batch operations on tables](#batch-operations-on-tables)
+  - [Transactions and asyncio.gather](#transactions-and-asynciogather)
+  - [Complex queries](#complex-queries)
+  - [Creating database and tables](#creating-database-and-tables)
+  - [Unit testing with DatabaseModel](#unit-testing-with-databasemodel)
 - [Development](#development)
 
 ## Installation
 
-Pynocular requires Python 3.6 or above.
+Pynocular requires Python 3.9 or above.
 
 ```bash
 pip install pynocular
@@ -35,37 +44,17 @@ pip install pynocular
 poetry add pynocular
 ```
 
-## Guide
+## Basic Usage
 
-### Basic Usage
+### Defining models
 
-Pynocular works by decorating your base Pydantic model with the function `database_model`. Once decorated
-with the proper information, you can proceed to use that model to interface with your specified database table.
-
-The first step is to define a `DBInfo` object. This will contain the connection information to your database.
+Pynocular works by augmenting Pydantic's `BaseModel` through the `DatabaseModel` class. Once you define a class that extends `DatabaseModel`, you can proceed to use that model to interface with your specified database table.
 
 ```python
-from pynocular.engines import DatabaseType, DBInfo
+from pydantic import Field
+from pynocular import DatabaseModel, UUID_STR
 
-
-# Example below shows how to connect to a locally-running Postgres database
-connection_string = f"postgresql://{db_user_name}:{db_user_password}@localhost:5432/{db_name}?sslmode=disable"
-)
-db_info = DBInfo(connection_string)
-```
-
-#### Object Management
-
-Once you define a `db_info` object, you are ready to decorate your Pydantic models and interact with your database!
-
-```python
-from pydantic import BaseModel, Field
-from pynocular.database_model import database_model, UUID_STR
-
-from my_package import db_info
-
-@database_model("organizations", db_info)
-class Org(BaseModel):
+class Org(DatabaseModel, table_name="organizations"):
 
     id: Optional[UUID_STR] = Field(primary_key=True, fetch_on_create=True)
     name: str = Field(max_length=45)
@@ -74,9 +63,30 @@ class Org(BaseModel):
 
     created_at: Optional[datetime] = Field(fetch_on_create=True)
     updated_at: Optional[datetime] = Field(fetch_on_update=True)
+```
 
-#### Object management
+### Creating a database and setting the backend
 
+The first step is to create a database pool and set the Pynocular backend. This will tell the models how to persist data.
+
+Use the [databases](https://www.encode.io/databases/) library to create a database connection using the dialect of your choice and pass the database object to `SQLDatabaseModelBackend`.
+
+```python
+from pynocular import Database, set_backend, SQLDatabaseModelBackend
+
+async def main():
+    # Example below shows how to connect to a locally-running Postgres database
+    connection_string = f"postgresql://{db_user_name}:{db_user_password}@localhost:5432/{db_name}?sslmode=disable"
+    async with Database(connection_string) as db:
+        with set_backend(SQLDatabaseModelBackend(db)):
+            print(await Org.get_list())
+```
+
+### Creating, reading, updating, and deleting database objects
+
+Once you define a database model and set a backend, you are ready to interact with your database!
+
+```python
 # Create a new Org via `create`
 org = await Org.create(name="new org", slug="new-org")
 
@@ -115,14 +125,13 @@ assert org3.name == "new org2"
 
 ```
 
-#### Serialization
+### Serialization
 
-DatabaseModels have their own serialization functions to convert to and from
-dictionaries.
+Database models have their own serialization functions to convert to and from dictionaries.
 
 ```python
 # Serializing org with `to_dict()`
-org = Org.create(name="org serialize", slug="org-serialize")
+org = await Org.create(name="org serialize", slug="org-serialize")
 org_dict = org.to_dict()
 expected_org_dict = {
     "id": "e64f6c7a-1bd1-4169-b482-189bd3598079",
@@ -133,163 +142,37 @@ expected_org_dict = {
 }
 assert org_dict == expected_org_dict
 
-
 # De-serializing org with `from_dict()`
 new_org = Org.from_dict(expected_org_dict)
 assert org == new_org
 ```
 
-#### Using Nested DatabaseModels
+### Special type arguments
 
-Pynocular also supports basic object relationships. If your database tables have a
-foreign key reference you can leverage that in your pydantic models to increase the
-accessibility of those related objects.
-
-```python
-from pydantic import BaseModel, Field
-from pynocular.database_model import database_model, nested_model, UUID_STR
-
-from my_package import db_info
-
-@database_model("users", db_info)
-class User(BaseModel):
-
-    id: Optional[UUID_STR] = Field(primary_key=True, fetch_on_create=True)
-    username: str = Field(max_length=100)
-
-    created_at: Optional[datetime] = Field(fetch_on_create=True)
-    updated_at: Optional[datetime] = Field(fetch_on_update=True)
-
-@database_model("organizations", db_info)
-class Org(BaseModel):
-
-    id: Optional[UUID_STR] = Field(primary_key=True, fetch_on_create=True)
-    name: str = Field(max_length=45)
-    slug: str = Field(max_length=45)
-    # `organizations`.`tech_owner_id` is a foreign key to `users`.`id`
-    tech_owner: Optional[nested_model(User, reference_field="tech_owner_id")]
-    # `organizations`.`business_owner_id` is a foreign key to `users`.`id`
-    business_owner: nested_model(User, reference_field="business_owner_id")
-    tag: Optional[str] = Field(max_length=100)
-
-    created_at: Optional[datetime] = Field(fetch_on_create=True)
-    updated_at: Optional[datetime] = Field(fetch_on_update=True)
-
-
-tech_owner = await User.create("tech owner")
-business_owner = await User.create("business owner")
-
-
-# Creating org with only business owner set
-org = await Org.create(
-    name="org name",
-    slug="org-slug",
-    business_owner=business_owner
-)
-
-assert org.business_owner == business_owner
-
-# Add tech owner
-org.tech_owner = tech_owner
-await org.save()
-
-# Fetch from the db and check ids
-org2 = Org.get(org.id)
-assert org2.tech_owner.id == tech_owner.id
-assert org2.business_owner.id == business_owner.id
-
-# Swap user roles
-org2.tech_owner = business_owner
-org2.business_owner = tech_owner
-await org2.save()
-org3 = await Org.get(org2.id)
-assert org3.tech_owner.id == business_owner.id
-assert org3.business_owner.id == tech_owner.id
-
-
-# Serialize org
-org_dict = org3.to_dict()
-expected_org_dict = {
-    "id": org3.id,
-    "name": "org name",
-    "slug": "org-slug",
-    "business_owner_id": tech_owner.id,
-    "tech_owner_id": business_owner.id,
-    "tag": None,
-    "created_at": org3.created_at,
-    "updated_at": org3.updated_at
-}
-
-assert org_dict == expected_org_dict
-
-```
-
-When using `DatabaseModel.get(..)`, any foreign references will need to be resolved before any properties besides the primary ID can be accessed. If you try to access a property before calling `fetch()` on the nested model, a `NestedDatabaseModelNotResolved` error will be thrown.
-
-```python
-org_get = await Org.get(org3.id)
-org_get.tech_owner.id # Does not raise `NestedDatabaseModelNotResolved`
-org_get.tech_owner.username # Raises `NestedDatabaseModelNotResolved`
-
-org_get = await Org.get(org3.id)
-await org_get.tech_owner.fetch()
-org_get.tech_owner.username # Does not raise `NestedDatabaseModelNotResolved`
-```
-
-Alternatively, calling `DatabaseModel.get_with_refs()` instead of `DatabaseModel.get()` will
-automatically fetch the referenced records and fully resolve those objects for you.
-
-```python
-org_get_with_refs = await Org.get_with_refs(org3.id)
-org_get_with_refs.tech_owner.username # Does not raise `NestedDatabaseModelNotResolved`
-```
-
-There are some situations where none of the objects have been persisted to the
-database yet. In this situation, you can call `Database.save(include_nested_models=True)`
-on the object with the references and it will persist all of them in a transaction.
-
-```python
-# We create the objects but dont persist them
-tech_owner = User("tech owner")
-business_owner = User("business owner")
-
-org = Org(
-    name="org name",
-    slug="org-slug",
-    business_owner=business_owner
-)
-
-await org.save(include_nested_models=True)
-```
-
-#### Special Type arguments
-
-With Pynocular you can set fields to be optional and set by the database. This is useful
+With Pynocular you can set fields to be optional and rely on the database server to set its value. This is useful
 if you want to let the database autogenerate your primary key or `created_at` and `updated_at` fields
 on your table. To do this you must:
 
 - Wrap the typehint in `Optional`
 - Provide keyword arguments of `fetch_on_create=True` or `fetch_on_update=True` to the `Field` class
 
-### Advanced Usage
+## Advanced Usage
 
 For most use cases, the basic usage defined above should suffice. However, there are certain situations
 where you don't necessarily want to fetch each object or you need to do more complex queries that
 are not exposed by the `DatabaseModel` interface. Below are some examples of how those situations can
 be addressed using Pynocular.
 
-#### Tables with compound keys
+### Tables with compound keys
 
 Pynocular supports tables that use multiple fields as its primary key such as join tables.
 
 ```python
-from pydantic import BaseModel, Field
-from pynocular.database_model import database_model, nested_model, UUID_STR
+from pydantic import Field
+from pynocular import DatabaseModel, UUID_STR
 
-from my_package import db_info
 
-@database_model("user_subscriptions", db_info)
-class UserSubscriptions(BaseModel):
+class UserSubscriptions(DatabaseModel, table_name="user_subscriptions"):
 
     user_id: UUID_STR = Field(primary_key=True, fetch_on_create=True)
     subscription_id: UUID_STR = Field(primary_key=True, fetch_on_create=True)
@@ -314,9 +197,9 @@ user_sub_get.name = "change name"
 await user_sub_get.save()
 ```
 
-#### Batch operations on tables
+### Batch operations on tables
 
-Sometimes you want to insert a bunch of records into a database and you don't want to do an insert for each one.
+Sometimes you want to perform a bulk insert of records into a database table.
 This can be handled by the `create_list` function.
 
 ```python
@@ -352,116 +235,118 @@ org = await Org.get("05c0060c-ceb8-40f0-8faa-dfb91266a6cf")
 assert org.tag == "blue"
 ```
 
-#### Complex queries
+### Transactions and asyncio.gather
+
+You should avoid using `asyncio.gather` within a database transaction. You can use Pynocular's `gather` function instead, which has the same interface but executes queries sequentially:
+
+```python
+from pynocular import get_backend
+from pynocular.util import gather
+
+async with get_backend().transaction():
+    await gather(
+        Org.create(id="abc", name="foo"),
+        Org.create(id="def", name="bar"),
+    )
+```
+
+The reason is that concurrent queries can interfere with each other and result in the error:
+
+```txt
+asyncpg.exceptions._base.InterfaceError: cannot perform operation: another operation is in progress
+```
+
+See: https://github.com/encode/databases/issues/125#issuecomment-511720013
+
+### Complex queries
 
 Sometimes your application will require performing complex queries, such as getting the count of each unique field value for all records in the table.
 Because Pynocular is backed by SQLAlchemy, we can access table columns directly to write pure SQLAlchemy queries as well!
 
 ```python
 from sqlalchemy import func, select
-from pynocular.engines import DBEngine
+from pynocular import get_backend
+
 async def generate_org_stats():
     query = (
         select([func.count(Org.column.id), Org.column.tag])
         .group_by(Org.column.tag)
         .order_by(func.count().desc())
     )
-    async with await DBEngine.transaction(Org._database_info, is_conditional=False) as conn:
+    # Get the active backend and open a database transaction
+    async with get_backend().transaction():
         result = await conn.execute(query)
-        return [dict(row) async for row in result]
+        return [dict(row) for row in result]
 ```
-
-NOTE: `DBengine.transaction` is used to create a connection to the database using the credentials passed in.
-If `is_conditional` is `False`, then it will add the query to any transaction that is opened in the call chain. This allows us to make database calls
-in different functions but still have them all be under the same database transaction. If there is no transaction opened in the call chain it will open
-a new one and any subsequent calls underneath that context manager will be added to the new transaction.
-
-If `is_conditional` is `True` and there is no transaction in the call chain, then the connection will not create a new transaction. Instead, the query will be performed without a transaction.
 
 ### Creating database and tables
 
-With Pynocular you can use simple python code to create new databases and database tables. All you need is a working connection string to the database host, a `DatabaseInfo` object that contains the information of the database you want to create, and a properly decorated pydantic model. When you decorate a pydantic model with Pynocular, it creates a SQLAlchemy table as a private variable. This can be accessed via the `_table` property
-(although accessing private variables is not recommended).
+With Pynocular you can use simple Python code to create new databases and database tables. All you need is a working connection string to the database host and a properly defined `DatabaseModel` class. When you define a class that extends `DatabaseModel`, Pynocular creates a SQLAlchemy table under the hood. This can be accessed via the `table` property.
 
 ```python
-from pynocular.db_util import create_new_database, create_table
+from pynocular import Database
+from pynocular.util import create_new_database, create_table
 
-from my_package import Org, db_info
+from my_package import Org
 
-connection_string = "postgresql://postgres:XXXX@localhost:5432/postgres?sslmode=disable"
+async def main():
+    connection_string = "postgresql://postgres:XXXX@localhost:5432/postgres"
+    await create_new_database(connection_string, "my_new_db")
 
-# Creates a new database and "organizations" table in that database
-await create_new_database(connection_string, db_info)
-await create_table(db_info, Org._table)
+    connection_string = "postgresql://postgres:XXXX@localhost:5432/my_new_db"
+    async with Database(connection_string) as db:
+        # Creates a new database and "organizations" table in that database
+        await create_table(db, Org.table)
 
 ```
 
-### Unit Testing with DatabaseModels
+### Unit testing with DatabaseModel
 
-Pynocular comes with tooling to write unit tests against your DatabaseModels, giving you
+Pynocular comes with tooling to write unit tests against your database models, giving you
 the ability to test your business logic without the extra work and latency involved in
-managing a database. All you have to do is use the `patch_database_model` context
-manager provided in Pynocular.
+managing a database. All you have to do is set the backend using the `MemoryDatabaseModelBackend` instead of the SQL backend. You don't need to change any of your database model definitions.
 
 ```python
-from pynocular.patch_models import patch_database_model
+from pynocular import MemoryDatabaseModelBackend, set_backend
 
 from my_package import Org, User
 
-
-with patch_database_model(Org):
+async def main():
     orgs = [
         Org(id=str(uuid4()), name="orgus borgus", slug="orgus_borgus"),
         Org(id=str(uuid4()), name="orgus borgus2", slug="orgus_borgus"),
     ]
 
-    await Org.create_list(orgs)
-    fetched_orgs = await Org.get_list(name=orgs[0].name)
-    assert orgs[0] == fetched_orgs[0]
+    with set_backend(MemoryDatabaseModelBackend()):
+        await Org.create_list(orgs)
+        fetched_orgs = await Org.get_list(name=orgs[0].name)
+        assert orgs[0] == fetched_orgs[0]
 
-# patch_database_model also works with nested models
-users = [
-    User(id=str(uuid4()), username="Bob"),
-    User(id=str(uuid4()), username="Sally"),
-]
-orgs = [
-    Org(
-        id=str(uuid4()),
-        name="orgus borgus",
-        slug="orgus_borgus",
-        tech_owner=users[0],
-        business_owner=users[1],
-    ),
-]
+    users = [
+        User(id=str(uuid4()), username="Bob"),
+        User(id=str(uuid4()), username="Sally"),
+    ]
 
-with patch_database_model(Org, models=orgs), patch_database_model(
-    User, models=users
-):
-    org = await Org.get(orgs[0].id)
-    org.name = "new test name"
-    users[0].username = "bberkley"
-
-    # Save the username update when saving the org model update
-    await org.save(include_nested_models=True)
-
-    # Get the org with the resolved nested model
-    org_get = await Org.get_with_refs(org.id)
-    assert org_get.name == "new test name"
-    assert org_get.tech_owner.username == "bberkley"
+    # You can also seed the backend with existing records
+    with MemoryDatabaseModelBackend(
+        records={
+            "orgs": [o.to_dict() for o in orgs],
+            "users": [u.to_dict() for u in users],
+        }
+    ):
+        org = await Org.get(orgs[0].id)
+        org.name = "new test name"
+        await org.save()
 ```
 
 ## Development
 
-To develop Pynocular, install dependencies and enable the pre-commit hook.
-
-The example below is using Python 3.9 but you can replace this with any supported version of Python.
-
-Install Python 3.9 and activate it in your shell.
+To develop Pynocular, install dependencies and enable the pre-commit hook. Make sure to install Python 3.9 and activate it in your shell.
 
 ```bash
 sudo yum install libffi-devel # Needed for ctypes to install poetry
-pyenv install 3.9.7
-pyenv shell 3.9.7
+pyenv install 3.9.12
+pyenv shell 3.9.12
 ```
 
 Install dependencies and enable the pre-commit hook.
